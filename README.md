@@ -18,7 +18,7 @@ is built on.
 optimization, so the way the problem is modelled (the objective function and
 the constraints) may not be set up correctly.
 
-## Help wanted 🙏
+## Help wanted
 
 If you know this area and want to help **fix or improve the equation / the
 optimization model**, please go ahead — contributions and corrections are very
