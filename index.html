@@ -1,0 +1,2393 @@
+<!-- Copyright © 2026 GFSI (Greater Fredericton Social Innovation). All rights reserved. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Produce Bag Optimizer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet" />
+<!-- SheetJS (xlsx) 0.18.5 — self-hosted so uploads work offline/behind firewalls;
+     integrity hash makes the browser refuse the file if it's ever tampered with. -->
+<script src="./xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"></script>
+<style>
+:root {
+  --bg: #f5f2eb;
+  --surface: #faf8f3;
+  --surface2: #f0ece0;
+  --border: #d8d0bc;
+  --border2: #c5b99e;
+  --text: #1a1714;
+  --text2: #6b6054;
+  --text3: #9c9085;
+  --green: #2d6a4f;
+  --green-bg: #d8f3dc;
+  --green-text: #1b4332;
+  --amber: #b5451b;
+  --amber-bg: #fde8d8;
+  --amber-text: #7c2d12;
+  --red: #9b1c1c;
+  --red-bg: #fee2e2;
+  --red-text: #7f1d1d;
+  --blue: #1e3a5f;
+  --blue-bg: #dbeafe;
+  --blue-text: #1e3a5f;
+  --accent: #2d6a4f;
+  --mono: 'DM Mono', monospace;
+  --serif: 'Fraunces', serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  background: var(--text);
+  color: var(--bg);
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  border-bottom: 2px solid var(--border2);
+}
+header h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 1.5rem;
+  letter-spacing: -.01em;
+  color: #f5f2eb;
+}
+header span {
+  font-size: 11px;
+  color: #9c9085;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 58px);
+}
+
+/* ── Sidebar ── */
+aside {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.nav-group label {
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  display: block;
+  margin-bottom: .5rem;
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  width: 100%;
+  padding: .5rem .75rem;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s, color .12s;
+}
+.nav-btn:hover { background: var(--surface2); color: var(--text); }
+.nav-btn.active { background: var(--text); color: var(--bg); }
+.nav-btn .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; opacity: .5; flex-shrink: 0;
+}
+.nav-btn.active .dot { opacity: 1; background: #7ed8a0; }
+
+.settings-block { display: flex; flex-direction: column; gap: .6rem; }
+.settings-block label { font-size: 10px; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; display: block; }
+.settings-block input[type=number], .settings-block input[type=text] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .35rem .6rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.settings-block input:focus { border-color: var(--border2); }
+
+.weight-row { display: flex; flex-direction: column; gap: .3rem; }
+.weight-row .wlabel { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text2); }
+.weight-row .wlabel span { font-weight: 500; color: var(--text); }
+.weight-row input[type=range] {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 3px;
+}
+
+.run-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: .6rem 1rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  letter-spacing: .04em;
+  transition: opacity .15s;
+}
+.run-btn:hover { opacity: .85; }
+.run-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.stat-pill {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .5rem .75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text2);
+}
+.stat-pill strong { font-weight: 500; color: var(--text); font-size: 13px; }
+
+/* ── Main ── */
+main { padding: 1.5rem 2rem; overflow-y: auto; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.page-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-weight: 300;
+  color: var(--text);
+  margin-bottom: .25rem;
+}
+.page-hint { font-size: 12px; color: var(--text3); margin-bottom: 1.25rem; }
+.hint-list {
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.55;
+  margin: 0 0 1.25rem 1.15rem;
+  padding: 0;
+}
+.hint-list li { margin-bottom: .3rem; }
+.hint-list li:last-child { margin-bottom: 0; }
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  background: var(--surface);
+  margin-bottom: 1.25rem;
+}
+.drop-zone:hover, .drop-zone.over { background: var(--green-bg); border-color: var(--green); }
+.drop-zone svg { margin-bottom: .75rem; opacity: .4; }
+.drop-zone p { font-size: 13px; color: var(--text2); }
+.drop-zone p strong { color: var(--text); }
+.drop-zone small { font-size: 11px; color: var(--text3); display: block; margin-top: .25rem; }
+
+/* ── Divider ── */
+.or-divider {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin: 1rem 0;
+  position: relative;
+}
+.or-divider::before, .or-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: calc(50% - 2rem);
+  height: 1px;
+  background: var(--border);
+}
+.or-divider::before { left: 0; }
+.or-divider::after { right: 0; }
+
+/* ── Manual form ── */
+.manual-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .75rem 1rem;
+  margin-bottom: 1rem;
+}
+.manual-form .full { grid-column: 1 / -1; }
+.field label { font-size: 10px; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; display: block; margin-bottom: 3px; }
+.field input, .field select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .35rem .6rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.field input:focus, .field select:focus { border-color: var(--border2); }
+.field select { cursor: pointer; }
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  margin-bottom: .75rem;
+  flex-wrap: wrap;
+}
+.btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .3rem .75rem;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.btn:hover { background: var(--surface2); color: var(--text); }
+.btn.danger { color: var(--red); border-color: var(--red-bg); }
+.btn.danger:hover { background: var(--red-bg); }
+.btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+.btn.primary:hover { opacity: .85; }
+.count-badge {
+  background: var(--green-bg);
+  color: var(--green-text);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* ── Table ── */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--surface2);
+  padding: .5rem .75rem;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody td {
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface2); }
+
+/* ── Badges ── */
+.badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.badge-fruit { background: var(--amber-bg); color: var(--amber-text); }
+.badge-veg   { background: var(--green-bg);  color: var(--green-text); }
+.badge-fixed { background: var(--blue-bg);   color: var(--blue-text); }
+.badge-auto  { background: var(--surface2);  color: var(--text2); border: 1px solid var(--border); }
+.badge-skip  { background: var(--red-bg);    color: var(--red-text); }
+.badge-ok    { background: var(--green-bg);  color: var(--green-text); }
+
+/* ── Inline inputs in table ── */
+td input[type=number], td input[type=text], td select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .2rem .4rem;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  outline: none;
+  width: 64px;
+}
+td select { width: auto; cursor: pointer; }
+td input:focus, td select:focus { border-color: var(--border2); }
+
+.del-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.del-btn:hover { background: var(--red-bg); color: var(--red); }
+
+/* ── Results ── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .75rem 1rem;
+}
+.metric-card .mlabel { font-size: 10px; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+.metric-card .mval { font-size: 1.3rem; font-weight: 500; color: var(--text); font-family: var(--serif); }
+.metric-card .mval.green { color: var(--green); }
+.metric-card .mval.red   { color: var(--red); }
+
+.section-title {
+  font-family: var(--serif);
+  font-size: 1rem;
+  font-weight: 300;
+  color: var(--text);
+  margin: 1.25rem 0 .5rem;
+  padding-bottom: .35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.result-row:last-child { border-bottom: none; }
+.result-row .rname { font-weight: 500; min-width: 150px; }
+.result-row .rprice { margin-left: auto; font-weight: 500; font-family: var(--mono); }
+.result-row .rsub { font-size: 11px; color: var(--text3); }
+
+
+.warning-box {
+  background: var(--amber-bg);
+  border: 1px solid #f6b886;
+  border-radius: 8px;
+  padding: .75rem 1rem;
+  font-size: 12px;
+  color: var(--amber-text);
+  margin-top: .75rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--text3);
+  font-size: 13px;
+}
+.empty-state big {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  color: var(--text2);
+  margin-bottom: .5rem;
+}
+
+.status-bar {
+  background: var(--green-bg);
+  color: var(--green-text);
+  border-radius: 6px;
+  padding: .4rem .75rem;
+  font-size: 11px;
+  margin-bottom: .75rem;
+  display: none;
+}
+
+/* ── Score toggle ── */
+details summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-top: 1.25rem;
+  padding-bottom: .35rem;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+details summary:hover { color: var(--text2); }
+
+/* ════════════════════════════════════════════════════════════════
+   Responsive — phones & small tablets. Additive only: desktop layout
+   above is unchanged. The fixed 260px sidebar grid collapses to a
+   single column, the step nav becomes a horizontal tab row, and the
+   multi-column forms stack.
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  body { font-size: 13px; }
+
+  header { padding: 1rem 1.25rem; flex-wrap: wrap; gap: .25rem .9rem; }
+  header h1 { font-size: 1.3rem; }
+
+  /* Stack sidebar above main content */
+  .app { grid-template-columns: 1fr; min-height: 0; }
+  aside {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 1.1rem 1rem;
+    gap: 1.1rem;
+  }
+  main { padding: 1.25rem 1rem; overflow-y: visible; }
+
+  /* Steps nav → compact horizontal tab row that sticks to the top
+     while scrolling the sidebar */
+  aside .nav-group:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    padding: .5rem 0;
+    margin: -.5rem 0;
+    z-index: 5;
+  }
+  aside .nav-group:first-child > label { flex-basis: 100%; margin-bottom: .15rem; }
+  aside .nav-group:first-child > .nav-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: max-content;
+    padding: .45rem .55rem;
+  }
+
+  /* Forms stop being 3-up */
+  .manual-form { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 520px) {
+  header { padding: .85rem 1rem; }
+  header h1 { font-size: 1.15rem; }
+  header span { font-size: 10px; }
+
+  main { padding: 1rem .85rem; }
+  .page-title { font-size: 1.15rem; }
+
+  /* Single-column forms on phones */
+  .manual-form { grid-template-columns: 1fr; }
+
+  /* Toolbars wrap tighter; let the "next/run" button drop to its own line */
+  .toolbar { gap: .4rem; }
+  .toolbar .btn { flex: 0 1 auto; }
+
+  /* Metric cards two-up rather than squeezing three */
+  .metrics-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Result rows: let the price wrap under the name instead of overflowing */
+  .result-row .rname { min-width: 0; flex: 1 1 100%; }
+  .result-row .rprice { margin-left: 0; }
+
+  /* Edit modal: full-width with side gutters, fields stacked */
+  #edit-overlay > div { margin: 6vh .75rem; max-width: none; }
+  #edit-overlay .manual-form { grid-template-columns: 1fr !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Produce Bag Optimizer</h1>
+  <span>$15 community bag &mdash; weekly planner</span>
+</header>
+
+<div class="app">
+  <aside>
+    <div class="nav-group">
+      <label>Steps</label>
+      <button class="nav-btn active" onclick="goTo('load')"><span class="dot"></span>Load list</button>
+      <button class="nav-btn" onclick="goTo('review')" id="nav-review"><span class="dot"></span>Review items</button>
+      <button class="nav-btn" onclick="goTo('result')" id="nav-result"><span class="dot"></span>Optimize &amp; results</button>
+      <button class="nav-btn" onclick="goTo('saved')" id="nav-saved"><span class="dot"></span>Saved bags <span id="saved-count-badge" style="display:none;background:var(--accent);color:#fff;border-radius:20px;font-size:10px;padding:1px 7px;margin-left:4px;">0</span></button>
+    </div>
+
+    <div class="nav-group">
+      <label>Settings</label>
+      <div class="settings-block">
+        <div>
+          <label>Customers</label>
+          <input type="number" id="s-bags" value="385" min="1" />
+        </div>
+        <div>
+          <label>Sale price ($)</label>
+          <input type="number" id="s-sale" value="15" min="1" step="0.5" />
+        </div>
+        <div style="font-size:10px;color:var(--text3);line-height:1.4;">
+          Max units per item are <strong style="color:var(--text2);">flexible</strong> by default &mdash;
+          the optimizer (and the duplicate penalty &lambda;) decides quantities.
+          Set a Max per group in the Review screen only where you want a hard cap.
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <label>Optimizer controls</label>
+      <div class="settings-block">
+
+        <div class="weight-row">
+          <div class="wlabel">Duplicate penalty (&lambda;) <span id="wlam-lbl">5</span></div>
+          <input type="range" id="w-lambda" min="0" max="10" value="5" step="1"
+            oninput="document.getElementById('wlam-lbl').textContent=this.value" />
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.4;">
+            Controls how much the optimizer is penalized for adding extra units of the same item vs including a new item.<br>
+            <strong style="color:var(--text2);">0&ndash;2</strong>: heavy stacking — fills the bag with multiples of the best-value crowd-pleasers.<br>
+            <strong style="color:var(--text2);">3&ndash;5</strong>: balanced — a few doubles of well-liked cheap items.<br>
+            <strong style="color:var(--text2);">6&ndash;8</strong>: mostly varied — an occasional double at most.<br>
+            <strong style="color:var(--text2);">9&ndash;10</strong>: strict variety — never repeats an item.
+          </div>
+        </div>
+
+        <div class="weight-row" style="margin-top:.75rem;">
+          <div class="wlabel">Min fruit/veg balance <span id="wbal-lbl">30</span>%</div>
+          <input type="range" id="w-balance" min="10" max="50" value="30" step="5"
+            oninput="document.getElementById('wbal-lbl').textContent=this.value" />
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.4;">
+            Minimum share of the bag each category (fruit and vegetable) must represent.<br>
+            <strong style="color:var(--text2);">10%</strong>: very loose — bag could be 90% vegetables, 10% fruit.<br>
+            <strong style="color:var(--text2);">30%</strong>: balanced mix — at least 3 in 10 items from each category.<br>
+            <strong style="color:var(--text2);">50%</strong>: strict 50/50 split enforced — equal fruits and vegetables.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="nav-group" id="side-stats" style="display:none;">
+      <label>Loaded list</label>
+      <div class="stat-pill">Items <strong id="ss-total">0</strong></div>
+      <div class="stat-pill">Priceable <strong id="ss-price">0</strong></div>
+      <div class="stat-pill">Always-in <strong id="ss-fixed">0</strong></div>
+    </div>
+
+    <div style="font-size:10px;color:var(--text3);line-height:1.5;padding:.5rem .75rem;background:var(--surface2);border-radius:6px;border:1px solid var(--border);">
+      <strong style="color:var(--text2);display:block;margin-bottom:3px;">Price band: $14.85 &ndash; $15.15</strong>
+      The bag cost must land within &plusmn;$0.15 of the sale price. Hard constraint &mdash; the optimizer will not produce a bag outside this range.
+    </div>
+
+    <button class="run-btn" onclick="goTo('saved')" id="run-btn" disabled>Select best bag &rarr;</button>
+  </aside>
+
+  <main>
+    <!-- ── LOAD PANEL ── -->
+    <div class="panel active" id="panel-load">
+      <p class="page-title">Load your produce list</p>
+      <p class="page-hint">Upload your weekly Excel sheet or add items manually. Both methods can be combined.</p>
+
+      <div id="status-bar" class="status-bar"></div>
+
+      <div class="drop-zone" id="drop-zone"
+        onclick="document.getElementById('file-in').click()"
+        ondragover="event.preventDefault();this.classList.add('over')"
+        ondragleave="this.classList.remove('over')"
+        ondrop="handleDrop(event)">
+        <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 12V3m0 0L8 7m4-4l4 4"/><rect x="3" y="13" width="18" height="8" rx="2" stroke-width="1" stroke-dasharray="3 2"/></svg>
+        <p><strong>Click or drag &amp; drop</strong> your Excel file here</p>
+        <small>Expects columns: Description &nbsp;·&nbsp; Pack/Size &nbsp;·&nbsp; PRICE &nbsp;·&nbsp; Unit Price</small>
+      </div>
+      <input type="file" id="file-in" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])" />
+
+      <div class="or-divider">or add manually</div>
+
+      <div class="manual-form">
+        <div class="field full">
+          <label>Item name</label>
+          <input type="text" id="m-name" placeholder="e.g. Apples" />
+        </div>
+        <div class="field">
+          <label>Case price ($)</label>
+          <input type="number" id="m-price" placeholder="22.00" min="0" step="0.01" />
+        </div>
+        <div class="field">
+          <label>Pack / size</label>
+          <input type="text" id="m-pack" placeholder="70 CT" />
+        </div>
+        <div class="field">
+          <label>Unit price ($, optional)</label>
+          <input type="number" id="m-unit" placeholder="0.20" min="0" step="0.01" />
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="m-cat">
+            <option value="veg">Vegetable</option>
+            <option value="fruit">Fruit</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Fixed portion type</label>
+          <select id="m-ftype" onchange="toggleManualFixed()">
+            <option value="none">Flexible</option>
+            <option value="ct">Fixed count (ct)</option>
+            <option value="lb">Fixed weight (lbs)</option>
+          </select>
+        </div>
+        <div class="field" id="m-fval-wrap" style="display:none;">
+          <label>Fixed amount</label>
+          <input type="number" id="m-fval" placeholder="4" min="0" step="0.5" />
+        </div>
+        <div class="field" style="align-self:end;">
+          <button class="btn primary" onclick="addManual()" style="width:100%;padding:.38rem .75rem;">Add item</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn danger" onclick="clearAll()">Clear all</button>
+        <span class="count-badge" id="load-count" style="display:none;">0 items</span>
+        <button class="btn primary" onclick="goTo('review')" id="next-load" style="display:none;margin-left:auto;">Review items →</button>
+      </div>
+
+      <div id="load-preview"></div>
+    </div>
+
+    <!-- ── REVIEW PANEL ── -->
+    <div class="panel" id="panel-review">
+      <p class="page-title">Review &amp; configure</p>
+      <p class="page-hint" style="margin-bottom:.5rem;">Hint / Manual Entry</p>
+      <ul class="hint-list">
+        <li>Verify categories, mark always-included items, set fixed portions.</li>
+        <li>Red "skip" items have no priceable unit and will be excluded &mdash; click &#9998; on any supplier to fix its details.</li>
+        <li>Drag a produce group onto another to merge them; drag a supplier card onto empty table space to split it into its own group, or onto another group to move it.</li>
+        <li>All merges and splits are remembered for future lists.</li>
+      </ul>
+
+      <div class="toolbar">
+        <button class="btn" onclick="goTo('load')">← Back</button>
+        <button class="btn" onclick="markAllAlwaysIn(false)">Clear all fixed</button>
+        <span class="count-badge" id="review-count">0 items</span>
+        <button class="btn primary" onclick="goTo('result');runAlgo();" style="margin-left:auto;">Run optimizer &rarr;</button>
+      </div>
+      <div id="review-table"></div>
+    </div>
+
+    <!-- ── RESULT PANEL ── -->
+    <div class="panel" id="panel-result">
+      <p class="page-title">Optimizer results</p>
+      <p class="page-hint">Run the optimizer with your current settings. When you're happy with a result, save it — then adjust settings and run again to compare.</p>
+
+      <div class="toolbar">
+        <button class="btn" onclick="goTo('review')">&#8592; Back</button>
+        <button class="btn primary" onclick="runAlgo()">Run optimizer</button>
+        <button class="btn" onclick="promptSaveBag()" id="save-bag-btn" style="display:none;border-color:var(--accent);color:var(--accent);">&#43; Save this bag</button>
+        <button class="btn" onclick="window.print()">Print / PDF</button>
+      </div>
+
+      <div id="result-area">
+        <div class="empty-state">
+          <big>No results yet</big>
+          Hit "Run optimizer" to generate a bag selection.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SAVED BAGS PANEL ── -->
+    <div class="panel" id="panel-saved">
+      <p class="page-title">Saved bags</p>
+      <p class="page-hint">All bag configurations saved this session. Expand any card to see full contents and purchase order.</p>
+      <div class="toolbar">
+        <button class="btn" onclick="goTo('result')">&#8592; Back to optimizer</button>
+        <button class="btn danger" onclick="clearSavedBags()" id="clear-saved-btn" style="display:none;">Clear all</button>
+      </div>
+      <div id="saved-bags-area">
+        <div class="empty-state">
+          <big>No bags saved yet</big>
+          Run the optimizer, then click "+ Save this bag" to save a result here.
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── EDIT ITEM MODAL — same fields as manual add ── -->
+<div id="edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,23,20,.45);z-index:50;overflow-y:auto;"
+  onclick="if(event.target===this)closeEditItem();">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;max-width:460px;margin:8vh auto;padding:1.25rem;box-shadow:0 12px 40px rgba(26,23,20,.25);">
+    <div style="font-family:var(--serif);font-size:1.05rem;font-weight:300;margin-bottom:.25rem;">Edit item</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:.85rem;">Fix or complete this supplier's details &mdash; same fields as a manual add. A valid pack or unit price makes a red item usable.</div>
+    <div class="manual-form" style="grid-template-columns:1fr 1fr;margin-bottom:.85rem;">
+      <div class="field full">
+        <label>Item name</label>
+        <input type="text" id="e-name" />
+      </div>
+      <div class="field">
+        <label>Case price ($)</label>
+        <input type="number" id="e-price" min="0" step="0.01" />
+      </div>
+      <div class="field">
+        <label>Pack / size</label>
+        <input type="text" id="e-pack" placeholder="e.g. 70 CT, 12X3 LB, 40X5'S" />
+      </div>
+      <div class="field">
+        <label>Unit price ($, optional)</label>
+        <input type="number" id="e-unit" min="0" step="0.01" />
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="e-cat">
+          <option value="veg">Vegetable</option>
+          <option value="fruit">Fruit</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Fixed portion type</label>
+        <select id="e-ftype" onchange="document.getElementById('e-fval-wrap').style.display=this.value==='none'?'none':'block';">
+          <option value="none">Flexible</option>
+          <option value="ct">Fixed count (ct)</option>
+          <option value="lb">Fixed weight (lbs)</option>
+        </select>
+      </div>
+      <div class="field" id="e-fval-wrap" style="display:none;">
+        <label>Fixed amount</label>
+        <input type="number" id="e-fval" min="0" step="0.5" />
+      </div>
+    </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+      <button class="btn" onclick="closeEditItem()">Cancel</button>
+      <button class="btn primary" onclick="saveEditItem()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const OZ = 0.0625, KG = 2.20462;
+let catalogue = [];
+let nid = 1;
+
+const APPEAL = {
+  apple:9,avocado:8,banana:10,beet:5,blueberr:9,brussel:6,cabbage:5,
+  carrot:8,celery:7,corn:9,cucumber:7,eggplant:5,garlic:8,grapefruit:7,
+  grape:9,kale:6,kiwi:7,lemon:7,lime:6,lettuce:7,iceberg:7,romaine:7,
+  boston:6,cantaloupe:8,honeydew:7,mushroom:8,onion:7,orange:9,pear:8,
+  pea:7,pepper:8,pineapple:9,potato:8,yam:7,coleslaw:5,radish:5,
+  plum:7,spinach:7,zucchini:7,tomato:8,turnip:5,sprout:6
+};
+function guessAppeal(n){ const nl=n.toLowerCase(); for(const[k,v] of Object.entries(APPEAL)){if(nl.includes(k)) return v;} return 6; }
+function guessCat(n){ const nl=n.toLowerCase(); return ['apple','avocado','banana','blueberr','grape','grapefruit','kiwi','lemon','lime','cantaloupe','honeydew','orange','pear','pineapple','plum','mango','strawberr','raspberry','peach'].some(f=>nl.includes(f))?'fruit':'veg'; }
+
+/* ── Single pack-string parser — every pack format decoded in ONE place ──
+   kind: 'wpack'   = N pre-packed weight units (12X3 LB = 12 bags of 3 lb;
+                     12X8 OZ = 12 packages of 8 oz) — the bag unit is one pre-pack
+         'bulk'    = loose weight case, scoopable (40 LB, 5 KG) — bag unit is 1 lb
+         'count'   = countable items. 100 CT = 100 items; 12 PTS = 12 pints;
+                     N X M ('S optional) = N packs of M items = N·M sellable units
+                     (40X5'S = 200 garlic bulbs, NOT 40 sleeves; 12 X 1 = 12 units)
+         'unknown' = unparseable (e.g. "CASE") — only priceable via its unit price
+   units = sellable units per case · lbsPerUnit / lbsPerCase set for weight kinds.
+   Apostrophes are stripped so packs like 40X5'S parse. ── */
+function parsePack(packStr, name, pieces){
+  const p=(packStr||'').toUpperCase().replace(/[\s']/g,'');
+  let m;
+  // Weight-only ("15 LB") and unparseable ("CASE") packs can still be count
+  // items — the count then lives in the description or a pieces-per-case
+  // column. Sources, in order of trust (explicit pack formats always win):
+  //  1. name AVERAGE ("AVG 18", "Approx 100", "~30"): counts are estimates,
+  //     so plan 5 BELOW the stated average to be safe;
+  //  2. name exact count ("30 CT");
+  //  3. pieces/case column — but only when it differs from the pack's own
+  //     leading number (sheets autofill it with the weight: "15 LB" pieces=15
+  //     is just the lbs again, while "9 KG" pieces=99 is a real count).
+  const nameCt = (()=>{
+    const up = String(name||'').toUpperCase();
+    const avgM = up.match(/(?:AVG|AVERAGE|APPROX|APRX|ABOUT|~)\.?\s*\(?\s*(\d+)/);
+    if(avgM && +avgM[1]>1) return Math.max(1, +avgM[1]-5);
+    const exactM = up.match(/(\d+)\s*CT\b/);
+    if(exactM && +exactM[1]>1) return +exactM[1];
+    const lead = (p.match(/^([\d.]+)/)||[])[1];
+    if(pieces>1 && (+pieces)!==(+lead)) return Math.round(pieces);
+    return null;
+  })();
+  const nameCount = () => ({kind:'count', units:nameCt, itemsPerPack:1, unitLabel:'1 ct'});
+  if((m=p.match(/^(\d+)X([\d.]+)LB$/))) return {kind:'wpack', units:+m[1], lbsPerUnit:+m[2],    lbsPerCase:+m[1]*+m[2],    unitLabel:`1 bag (${m[2]} lb)`};
+  if((m=p.match(/^(\d+)X([\d.]+)OZ$/))) return {kind:'wpack', units:+m[1], lbsPerUnit:+m[2]*OZ, lbsPerCase:+m[1]*+m[2]*OZ, unitLabel:`1 pack (${m[2]} oz)`};
+  if((m=p.match(/^(\d+)X([\d.]+)KG$/))) return {kind:'wpack', units:+m[1], lbsPerUnit:+m[2]*KG, lbsPerCase:+m[1]*+m[2]*KG, unitLabel:`1 bag (${m[2]} kg)`};
+  if((m=p.match(/^([\d.]+)LBS?$/)))     return nameCt ? nameCount() : {kind:'bulk',  lbsPerUnit:1, lbsPerCase:+m[1],    unitLabel:'1 lb'};
+  if((m=p.match(/^([\d.]+)KG$/)))       return nameCt ? nameCount() : {kind:'bulk',  lbsPerUnit:1, lbsPerCase:+m[1]*KG, unitLabel:'1 lb'};
+  if((m=p.match(/^(\d+)CT$/)))          return {kind:'count', units:+m[1], itemsPerPack:1, unitLabel:'1 ct'};
+  if((m=p.match(/^(\d+)PTS?$/)))        return {kind:'count', units:+m[1], itemsPerPack:1, unitLabel:'1 pint'};
+  if((m=p.match(/^(\d+)X(\d+)S?$/)))    return {kind:'count', units:+m[1]*+m[2], itemsPerPack:+m[2], unitLabel:'1 ct'};
+  if((m=p.match(/^(\d+)/)))             return nameCt ? nameCount() : {kind:'unknown', units:+m[1], itemsPerPack:1, unitLabel:'1 unit'};
+  return nameCt ? nameCount() : {kind:'unknown', units:1, itemsPerPack:1, unitLabel:'1 unit'};
+}
+
+function parseCpl(item){
+  if(item.perLb && item.unitPrice) return +item.unitPrice;
+  const pk=parsePack(item.pack, item.name, item.pieces);
+  return pk.lbsPerCase ? item.casePrice/pk.lbsPerCase : null;
+}
+/* ── Items per BAG UNIT for count items: 1 normally (bags count single items,
+   e.g. garlic bulbs), or itemsPerPack when the group's countMode is 'pack'
+   (bags get a whole inner pack, e.g. a sleeve of 5). Purchasing is identical
+   either way — only the bag accounting changes. ── */
+function unitItems(item){
+  const pk=parsePack(item.pack, item.name, item.pieces);
+  return (item.countMode==='pack' && pk.itemsPerPack>1) ? pk.itemsPerPack : 1;
+}
+
+function parseCpu(item){
+  const pk=parsePack(item.pack, item.name, item.pieces);
+  const ui=unitItems(item);
+  // Supplier sheets quote Unit Price per inner pack (e.g. per garlic SLEEVE for
+  // 40X5'S). Per bag unit that's ×(unitItems/itemsPerPack): per item → ÷pack
+  // size; per whole pack → unchanged.
+  if(item.unitPrice && !item.perLb) return +item.unitPrice*ui/(pk.itemsPerPack||1);
+  return (pk.kind==='count'||pk.kind==='wpack') ? item.casePrice*ui/pk.units : null;
+}
+function detectPerLb(uStr){ return String(uStr||'').toUpperCase().includes('LB'); }
+
+function isPriceable(item){ return parseCpl(item)!==null||parseCpu(item)!==null; }
+
+/* ── Unit size: the smallest indivisible portion for a bag ──
+   Returns {lbs, label} where lbs is the per-unit weight in lbs (null for count items).
+   For bulk-lb items (perLb=true, e.g. "40 LB" bananas) the individual unit IS 1 lb — but we
+   use fixedVal or minPortion as the floor since you scoop by weight.
+   For NxM packs the individual unit is M lbs / M oz / etc. — cannot go below that. */
+function parseUnitSize(item){
+  const pk=parsePack(item.pack, item.name, item.pieces);
+  if(pk.kind==='wpack') return {lbs:pk.lbsPerUnit, label:pk.unitLabel};
+  if(pk.kind==='bulk')  return {lbs:1, label:'1 lb'};
+  const ui=unitItems(item);
+  return {lbs:null, label: ui>1 ? `1 pack of ${ui}` : pk.unitLabel};
+}
+
+/* ── Normalise item name to a base produce key for supplier grouping ──
+   "Potatoes, Red PEI" / "Potatoes, Yellow PEI" / "Potatoes, Second Best" → "potatoes"
+   "Tomatoes, Grape USA" / "Tomatoes, Hothouse Canada" / "Tomatoes, Vine Red" → "tomatoes"
+   "Carrots, Cello 2 LB USA" / "Carrots, MINI USA" → "carrots"
+   "Oranges, EGYPT" / "Oranges, 100CT" → "oranges"
+   Strategy: take the part before the first comma (or full name if no comma),
+   then strip noise words, take only the FIRST remaining word as the key. ── */
+/* ── User-remembered group merges: foldedKey → target foldedKey.
+   Set via the "merge into…" control in Review, persisted to localStorage.
+   Covers synonyms and irregular entries no rule can anticipate
+   ("Scallions" → "green onion", "Red Onions" (no comma) → "onion"). ── */
+const groupAlias = {};
+
+/* Fold plural word forms so "Apple"/"Apples" and "Tomato"/"Tomatoes" collide.
+   The stem doesn't need to be correct English — it only needs to be
+   CONSISTENT, so variant spellings land on the same key. */
+function foldPlural(w){
+  if(w.length<4 || /ss$/.test(w)) return w;
+  if(/ies$/.test(w))         return w.slice(0,-3)+'y';
+  if(/(sh|ch|o|x)es$/.test(w)) return w.slice(0,-2);
+  if(/s$/.test(w))           return w.slice(0,-1);
+  return w;
+}
+
+function baseKey(name){
+  // Take part before comma (sheets use "Product, descriptor" convention) —
+  // descriptors after the comma (colour, size, origin) NEVER affect the key,
+  // so "Onions, Yellow" and "Onions, Red" stay grouped.
+  const primary = (name.split(',')[0] || name).trim().toLowerCase();
+  // Strip bracketed content e.g. "(80 CT)"
+  const cleaned = primary.replace(/\(.*?\)/g,'').trim();
+  // Strip size/origin/packaging noise — but KEEP product-defining words like
+  // colours and varietals (green onions ≠ onions, sweet potatoes ≠ potatoes,
+  // cherry tomatoes ≠ tomatoes). Tokens containing digits ("6oz") also go.
+  const noise = /\b(medium|large|small|jumbo|mini|extra|regular|fancy|xl|bulk|cello|sleeves?|hothouse|canada|usa|nj|pei|egypt|maritimes|belleisle|anjou|seedless|iceless|wrapped|second|best|other|new)\b/g;
+  const stripped = cleaned.replace(noise,'').replace(/\S*\d\S*/g,'').replace(/[^a-z\s]/g,'').replace(/\s+/g,' ').trim();
+  const folded = stripped.split(' ').filter(Boolean).map(foldPlural).join(' ')
+              || foldPlural(cleaned.split(' ')[0]||'') || 'unknown';
+  return groupAlias[folded] || folded;
+}
+
+function mergeGroup(srcKey, targetKey){
+  if(!srcKey || !targetKey || srcKey===targetKey) return;
+  // Re-point any aliases that targeted the source, then alias the source itself
+  Object.keys(groupAlias).forEach(k=>{ if(groupAlias[k]===srcKey) groupAlias[k]=targetKey; });
+  groupAlias[srcKey]=targetKey;
+  delete chosenSupplier[srcKey];
+  delete userLockedSupplier[srcKey];
+  persistState();
+  renderReview();
+}
+function unmergeGroup(srcKey){
+  delete groupAlias[srcKey];
+  persistState();
+  renderReview();
+}
+
+/* ── Per-supplier split rules: normalized FULL name → true. A split supplier
+   forms its own independent group. Persisted like aliases, so it survives
+   refreshes AND applies to future weekly uploads of the same supplier line.
+   A split group can itself be merged into another group via groupAlias. ── */
+const splitItems = {};
+
+/* Normalize the WHOLE name (both sides of the comma) — unlike baseKey this
+   keeps the descriptor, so "Potatoes, Red PEI" → "potato red pei". */
+function fullKey(name){
+  const cleaned = String(name).toLowerCase().replace(/\(.*?\)/g,' ')
+    .replace(/\S*\d\S*/g,' ').replace(/[^a-z\s]/g,' ').replace(/\s+/g,' ').trim();
+  return cleaned.split(' ').filter(Boolean).map(foldPlural).join(' ') || 'unknown';
+}
+
+/* Group key for an item: split rule (possibly re-merged elsewhere) wins,
+   otherwise the natural name-based group. Use THIS for all grouping. */
+function itemKey(item){
+  const fk = fullKey(item.name);
+  if(splitItems[fk]) return groupAlias[fk] || fk;
+  return baseKey(item.name);
+}
+
+function splitSupplier(id, targetKey){
+  const it = catalogue.find(x=>x.id===id);
+  if(!it) return;
+  const oldKey = itemKey(it);
+  const fk = fullKey(it.name);
+  if(targetKey){
+    if(targetKey===oldKey) return;
+    splitItems[fk]=true; groupAlias[fk]=targetKey;  // move supplier into another group
+  } else {
+    splitItems[fk]=true; delete groupAlias[fk];     // make it its own group
+  }
+  if(chosenSupplier[oldKey]===id) delete chosenSupplier[oldKey];
+  if(userLockedSupplier[oldKey]===id) delete userLockedSupplier[oldKey];
+  persistState();
+  renderReview();
+}
+
+function unsplitSupplier(fk){
+  delete splitItems[fk];
+  delete groupAlias[fk];
+  persistState();
+  renderReview();
+}
+
+/* ── File handling ── */
+function handleFile(file){
+  if(!file) return;
+  document.getElementById('drop-zone').classList.remove('over');
+  // 1) Reject anything that isn't an Excel workbook by extension — blocks
+  //    PDFs, images, CSVs and other dropped files before we try to parse them.
+  if(!/\.(xlsx|xls|xlsm)$/i.test(file.name)){
+    showStatus(`"${file.name}" isn't an Excel file. Upload a .xlsx or .xls weekly order sheet.`,'err');
+    return;
+  }
+  const reader=new FileReader();
+  reader.onerror=()=>showStatus(`Couldn't read "${file.name}". Please try again.`,'err');
+  reader.onload=e=>{
+    let wb;
+    try{
+      wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    }catch(err){
+      showStatus(`Couldn't open "${file.name}" — it may be corrupted or not a real Excel file.`,'err');
+      return;
+    }
+    try{
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=ws ? XLSX.utils.sheet_to_json(ws,{defval:''}) : [];
+      // 2) Reject Excel files that aren't a weekly produce order — they won't
+      //    carry the Description + PRICE columns this app maps. (Unit Price
+      //    is excluded from the price check so it can't masquerade as PRICE.)
+      const headerKeys=rows.length?Object.keys(rows[0]):[];
+      const hasDesc=headerKeys.some(k=>/description/i.test(k));
+      const hasPrice=headerKeys.some(k=>/^\s*price\s*$/i.test(k));
+      if(!rows.length || !hasDesc || !hasPrice){
+        showStatus(`"${file.name}" doesn't look like a weekly order sheet. Expected columns: Description · Pack/Size · PRICE · Unit Price.`,'err');
+        return;
+      }
+      let added=0;
+      rows.forEach((r,i)=>{
+        const name=String(r['Description']||r['description']||'').trim();
+        const pack=String(r['Pack/Size']||r['Pack']||'').trim();
+        const casePrice=parseFloat(r['PRICE']||r['Price']||r['price']||0);
+        let uRaw=String(r['Unit Price']||r['unit price']||'');
+        // Some sheets leave the unit-price header cell blank; the column then
+        // arrives as __EMPTY. Accept it when it looks like a sane unit price.
+        if(!uRaw){ const v=parseFloat(r['__EMPTY']); if(v>0 && v<casePrice) uRaw=String(v); }
+        let unitPrice=parseFloat(uRaw)||null;
+        // Suppliers sometimes quote the per-piece price inside the description
+        // ("AVG 18 - 2.50 EACH"). Use it ONLY when the unit-price column is
+        // empty — a supplier-provided column price is never overwritten.
+        if(unitPrice==null){
+          const em=name.toUpperCase().match(/\$?\s*([\d.]+)\s*\/?\s*(?:EACH|EA)\b/);
+          if(em && +em[1]>0 && +em[1]<casePrice) unitPrice=+em[1];
+        }
+        const perLb=detectPerLb(uRaw);
+        // Optional pieces-per-case column — header wording varies between
+        // sheets ("Pieces /Case", "PCS/CASE", …) and most sheets lack it
+        // entirely. parsePack treats it as a low-trust count source.
+        const pieceKey = Object.keys(r).find(k=>/piece|\bpcs?\b/i.test(k));
+        const pieces = pieceKey ? (parseFloat(r[pieceKey])||null) : null;
+        if(!name||isNaN(casePrice)||casePrice<=0) return;
+        catalogue.push({id:nid++,name,pack,casePrice,unitPrice,perLb,pieces,cat:guessCat(name),appeal:guessAppeal(name),alwaysIn:false,fixedType:'none',fixedVal:null});
+        added++;
+      });
+      if(!added){
+        showStatus(`No priceable produce rows found in "${file.name}". Check the Description and PRICE columns.`,'err');
+        return;
+      }
+      showStatus(`Loaded ${added} items from "${file.name}"`);
+      afterLoad();
+    }catch(e){showStatus('Could not parse file. Check column headers: Description, Pack/Size, PRICE, Unit Price.','err');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function handleDrop(e){ e.preventDefault(); document.getElementById('drop-zone').classList.remove('over'); handleFile(e.dataTransfer.files[0]); }
+
+function toggleManualFixed(){
+  const v=document.getElementById('m-ftype').value;
+  document.getElementById('m-fval-wrap').style.display=v==='none'?'none':'block';
+}
+
+function addManual(){
+  const name=document.getElementById('m-name').value.trim();
+  const casePrice=parseFloat(document.getElementById('m-price').value);
+  const pack=document.getElementById('m-pack').value.trim();
+  const unitPrice=parseFloat(document.getElementById('m-unit').value)||null;
+  const cat=document.getElementById('m-cat').value;
+  const fixedType=document.getElementById('m-ftype').value;
+  const fixedVal=parseFloat(document.getElementById('m-fval').value)||null;
+  if(!name||isNaN(casePrice)||casePrice<=0){ alert('Name and case price are required.'); return; }
+  const perLb=detectPerLb(String(unitPrice||''));
+  catalogue.push({id:nid++,name,pack,casePrice,unitPrice,perLb,cat,appeal:guessAppeal(name),alwaysIn:fixedType!=='none',fixedType,fixedVal});
+  ['m-name','m-price','m-pack','m-unit','m-fval'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m-ftype').value='none';
+  document.getElementById('m-fval-wrap').style.display='none';
+  afterLoad(); showStatus(`Added "${name}"`);
+}
+
+/* ── Edit-item modal — same semantics as a manual add, applied in place ── */
+let editingItemId = null;
+
+function openEditItem(id){
+  const i = catalogue.find(x=>x.id===id);
+  if(!i) return;
+  editingItemId = id;
+  document.getElementById('e-name').value  = i.name;
+  document.getElementById('e-price').value = i.casePrice;
+  document.getElementById('e-pack').value  = i.pack||'';
+  document.getElementById('e-unit').value  = i.unitPrice!=null ? i.unitPrice : '';
+  document.getElementById('e-cat').value   = i.cat||'veg';
+  document.getElementById('e-ftype').value = i.fixedType||'none';
+  document.getElementById('e-fval').value  = i.fixedVal!=null ? i.fixedVal : '';
+  document.getElementById('e-fval-wrap').style.display = (i.fixedType && i.fixedType!=='none') ? 'block' : 'none';
+  document.getElementById('edit-overlay').style.display = 'block';
+}
+
+function closeEditItem(){
+  editingItemId = null;
+  document.getElementById('edit-overlay').style.display = 'none';
+}
+
+function saveEditItem(){
+  const i = catalogue.find(x=>x.id===editingItemId);
+  if(!i){ closeEditItem(); return; }
+  const name = document.getElementById('e-name').value.trim();
+  const casePrice = parseFloat(document.getElementById('e-price').value);
+  if(!name || isNaN(casePrice) || casePrice<=0){ alert('Name and case price are required.'); return; }
+  const oldKey = itemKey(i);
+  i.name      = name;
+  i.casePrice = casePrice;
+  i.pack      = document.getElementById('e-pack').value.trim();
+  const u = parseFloat(document.getElementById('e-unit').value);
+  i.unitPrice = isNaN(u) ? null : u;
+  i.cat       = document.getElementById('e-cat').value;
+  i.fixedType = document.getElementById('e-ftype').value;
+  const fv = parseFloat(document.getElementById('e-fval').value);
+  i.fixedVal  = isNaN(fv) ? null : fv;
+  if(i.fixedType!=='none' && i.fixedVal) i.alwaysIn = true;
+  i.perLb = detectPerLb(String(i.unitPrice||''));
+  // Renaming can move the item to a different produce group — drop stale picks
+  const newKey = itemKey(i);
+  if(oldKey !== newKey){
+    if(chosenSupplier[oldKey]===i.id) delete chosenSupplier[oldKey];
+    if(userLockedSupplier[oldKey]===i.id) delete userLockedSupplier[oldKey];
+  }
+  closeEditItem();
+  afterLoad();
+  renderReview();
+  showStatus(`Updated "${name}"`);
+}
+
+function removeItem(id){
+  const item=catalogue.find(i=>i.id===id);
+  if(item){
+    const k=itemKey(item);
+    // If we're removing the currently chosen supplier for this group, clear the override
+    if(chosenSupplier[k]===id) delete chosenSupplier[k];
+    if(userLockedSupplier[k]===id) delete userLockedSupplier[k];
+  }
+  catalogue=catalogue.filter(i=>i.id!==id);
+  afterLoad();
+  renderReview();
+}
+
+function clearAll(){
+  catalogue=[]; lastSnapshot=null;
+  Object.keys(chosenSupplier).forEach(k=>delete chosenSupplier[k]);
+  Object.keys(userLockedSupplier).forEach(k=>delete userLockedSupplier[k]);
+  afterLoad(); document.getElementById('load-preview').innerHTML=''; showStatus('');
+}
+
+function markAllAlwaysIn(v){ catalogue.forEach(i=>i.alwaysIn=v); renderReview(); }
+
+function showStatus(msg,type){
+  const el=document.getElementById('status-bar');
+  if(!msg){el.style.display='none';return;}
+  el.style.display='block';
+  el.style.background=type==='err'?'var(--red-bg)':'var(--green-bg)';
+  el.style.color=type==='err'?'var(--red-text)':'var(--green-text)';
+  el.textContent=msg;
+}
+
+function afterLoad(){
+  const n=catalogue.length;
+  const cnt=document.getElementById('load-count');
+  const nx=document.getElementById('next-load');
+  cnt.textContent=`${n} item${n!==1?'s':''}`;
+  cnt.style.display=n?'inline-block':'none';
+  nx.style.display=n?'inline-block':'none';
+  document.getElementById('run-btn').disabled=n===0;
+  updateSideStats();
+  renderLoadPreview();
+  persistState();
+}
+
+function updateSideStats(){
+  const n=catalogue.length;
+  document.getElementById('side-stats').style.display=n?'block':'none';
+  document.getElementById('ss-total').textContent=n;
+  document.getElementById('ss-price').textContent=catalogue.filter(isPriceable).length;
+  document.getElementById('ss-fixed').textContent=catalogue.filter(i=>i.alwaysIn).length;
+}
+
+/* ── Preview table on load screen ── */
+function renderLoadPreview(){
+  const el=document.getElementById('load-preview');
+  if(!catalogue.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="tbl-wrap" style="max-height:240px;overflow-y:auto;"><table>
+  <thead><tr><th>Name</th><th>Pack</th><th>Case $</th><th>Category</th><th></th></tr></thead>
+  <tbody>${catalogue.map(i=>`<tr>
+    <td style="font-weight:500;">${i.name}</td>
+    <td style="color:var(--text3);">${i.pack||'—'}</td>
+    <td>$${i.casePrice.toFixed(2)}</td>
+    <td><span class="badge badge-${i.cat}">${i.cat}</span></td>
+    <td><button class="del-btn" onclick="removeItem(${i.id})" title="Remove">×</button></td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ── Review table — grouped by base produce key ── */
+const chosenSupplier = {};     // groupKey → item id shown as selected in the UI (auto = cheapest)
+const userLockedSupplier = {}; // groupKey → item id the USER explicitly pinned — only these
+                               // constrain the optimizer; auto-picks leave HiGHS free to choose
+
+function getGroups(){
+  const groups={};
+  catalogue.forEach(i=>{
+    const k=itemKey(i);
+    if(!groups[k]) groups[k]={key:k,items:[],alwaysIn:false,fixedType:'none',fixedVal:null,cat:i.cat};
+    groups[k].items.push(i);
+    if(i.alwaysIn) groups[k].alwaysIn=true;
+    if(i.fixedType&&i.fixedType!=='none'&&groups[k].fixedType==='none'){
+      groups[k].fixedType=i.fixedType;
+      groups[k].fixedVal=i.fixedVal;
+    }
+  });
+  return Object.values(groups);
+}
+
+function setChosenSupplier(groupKey, itemId){
+  chosenSupplier[groupKey]=itemId;
+  userLockedSupplier[groupKey]=itemId; // explicit click = pin for the optimizer
+  persistState();
+}
+function unpinSupplier(groupKey){
+  delete userLockedSupplier[groupKey];
+  persistState();
+}
+
+function applyGroupSetting(key,field,value){
+  catalogue.forEach(i=>{ if(itemKey(i)===key) i[field]=value; });
+  persistState();
+}
+
+function renderReview(){
+  const el=document.getElementById('review-table');
+  const groups=getGroups();
+  document.getElementById('review-count').textContent=`${groups.length} group${groups.length!==1?'s':''} · ${catalogue.length} item${catalogue.length!==1?'s':''}`;
+  if(!catalogue.length){el.innerHTML='<div class="empty-state"><big>Nothing loaded yet</big>Go back to Step 1 and load your list.</div>';return;}
+
+  let html=`<div class="tbl-wrap"
+    ondragover="event.preventDefault();"
+    ondrop="event.preventDefault();const d=event.dataTransfer.getData('text/plain');
+      if(d&&d.startsWith('unmerge:')) unmergeGroup(d.slice(8));
+      else if(d&&d.startsWith('split:')) splitSupplier(parseInt(d.slice(6)));"><table>
+  <thead><tr>
+    <th style="width:18%;">Produce group</th>
+    <th style="width:7%;">Category</th>
+    <th style="width:9%;">Always in?</th>
+    <th style="width:14%;">Portion type</th>
+    <th style="width:6%;">Unit type</th>
+    <th style="width:7%;">Min</th>
+    <th style="width:7%;">Max</th>
+    <th style="width:26%;">Suppliers (&#9733; = cheapest &middot; click to pin, &#128204; = pinned)</th>
+    <th style="width:6%;"></th>
+  </tr></thead><tbody>`;
+
+  groups.forEach(g=>{
+    const gKey=g.key;
+    const anyPriceable=g.items.some(isPriceable);
+    const repItem=g.items[0];
+    const groupAlwaysIn=g.items.some(i=>i.alwaysIn);
+    const groupFixedType=g.items.find(i=>i.fixedType&&i.fixedType!=='none')?.fixedType||'none';
+    const groupFixedVal=g.items.find(i=>i.fixedVal)?.fixedVal||'';
+    const gid=gKey.replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+
+    // Determine best supplier (lowest cpb among priceable)
+    const priceableSuppliers=g.items.filter(isPriceable).map(i=>{
+      const cpl=parseCpl(i),cpu=parseCpu(i);
+      const us=parseUnitSize(i);
+      const fixedType=i.fixedType||'none';
+      const fixedVal=i.fixedVal||null;
+      let cpb;
+      if(fixedType==='lb'&&fixedVal) cpb=(cpl||0)*fixedVal;
+      else if(fixedType==='ct'&&fixedVal) cpb=(cpu||0)*fixedVal;
+      else if(us.lbs) cpb=(cpl||0)*us.lbs;
+      else cpb=cpu||0;
+      return{...i,cpl,cpu,us,cpb};
+    }).filter(i=>i.cpb>0&&!isNaN(i.cpb)).sort((a,b)=>a.cpb-b.cpb);
+    const bestId=priceableSuppliers.length?priceableSuppliers[0].id:null;
+
+    // Resolve which supplier is currently chosen (manual override or best)
+    const currentChosen = chosenSupplier[gKey] && g.items.find(i=>i.id===chosenSupplier[gKey])
+      ? chosenSupplier[gKey]
+      : bestId;
+    // Auto-set if not yet set
+    if(!chosenSupplier[gKey] && bestId) chosenSupplier[gKey]=bestId;
+
+    // Supplier rows — radio button per supplier
+    const supplierRows=g.items.map(i=>{
+      const cpl=parseCpl(i),cpu=parseCpu(i);
+      const us=parseUnitSize(i);
+      const priceStr=cpl?`$${cpl.toFixed(3)}/lb`:cpu?`$${cpu.toFixed(2)}/unit`:'—';
+      const ok=isPriceable(i);
+      const isBest=ok&&i.id===bestId;
+      const isChosen=i.id===currentChosen;
+      const isPinned=userLockedSupplier[gKey]===i.id;
+      const sup=priceableSuppliers.find(s=>s.id===i.id);
+      const cpbStr=sup?` · $${sup.cpb.toFixed(3)}/bag`:'';
+      const radioName=`sup-${gid}`;
+      const unitsAvail = i.unitsAvailable !== false; // default true
+      return`<label draggable="true"
+        title="Drag onto empty table space to make this supplier its own group; drag onto another produce group to move it there"
+        ondragstart="event.stopPropagation();event.dataTransfer.setData('text/plain','split:${i.id}');event.dataTransfer.effectAllowed='move';"
+        style="display:inline-flex;align-items:center;gap:5px;
+        background:${isChosen?'var(--green-bg)':ok?'var(--surface2)':'var(--red-bg)'};
+        border:1.5px solid ${isChosen?'#a3d9b1':ok?'var(--border)':'#f6b886'};
+        border-radius:6px;padding:5px 9px;font-size:11px;margin:3px;cursor:${ok?'pointer':'default'};
+        transition:background .12s,border-color .12s;">
+        ${ok?`<input type="radio" name="${radioName}" value="${i.id}"
+          ${isChosen?'checked':''}
+          ${ok?'':'disabled'}
+          style="accent-color:var(--accent);cursor:pointer;"
+          onchange="setChosenSupplier('${gKey}',${i.id});renderReview();" />`
+          :`<span style="width:13px;display:inline-block;"></span>`}
+        <span style="display:flex;flex-direction:column;gap:1px;">
+          <span style="display:flex;align-items:center;gap:4px;">
+            ${isBest?`<span style="font-size:10px;font-weight:500;color:var(--green-text);">★</span>`:''}
+            <span style="font-weight:${isChosen?'500':'400'};color:${ok?'var(--text)':'var(--text3)'};">${i.name}</span>
+            ${isPinned?`<button class="del-btn" title="Pinned — optimizer must use this supplier. Click to unpin and let it choose."
+              style="font-size:11px;padding:0 2px;"
+              onclick="event.preventDefault();unpinSupplier('${gKey}');renderReview();">&#128204;</button>`:''}
+          </span>
+          <span style="color:var(--text3);font-size:10px;">${i.pack||'—'} &nbsp;
+            <span style="font-weight:500;color:${ok?(isChosen?'var(--green)':'var(--text2)'):'var(--red)'};">${priceStr}${cpbStr}</span>
+            ${!ok?'<span style="color:var(--red);"> · no price</span>':''}
+          </span>
+          ${ok?`<label style="display:flex;align-items:center;gap:3px;cursor:pointer;margin-top:2px;" onclick="event.stopPropagation();">
+            <input type="checkbox" ${unitsAvail?'checked':''}
+              style="accent-color:var(--accent);cursor:pointer;"
+              onchange="const it=catalogue.find(x=>x.id===${i.id});if(it)it.unitsAvailable=this.checked;" />
+            <span style="font-size:10px;color:var(--text3);">Units available</span>
+          </label>`:''}
+        </span>
+        <button class="del-btn" onclick="event.preventDefault();openEditItem(${i.id});"
+          title="Edit this supplier's details${ok?'':' — fix the pack/price so it can be used'}"
+          style="font-size:11px;padding:0 3px;margin-left:4px;color:${ok?'var(--text3)':'var(--red)'};">&#9998;</button>
+        <button class="del-btn" onclick="event.preventDefault();removeItem(${i.id});renderReview();"
+          title="Remove supplier" style="font-size:12px;padding:0 3px;">×</button>
+      </label>`;
+    }).join('');
+
+    const groupMaxUnits = g.items.find(i=>i.maxUnits)?.maxUnits || null; // null = flexible
+    const groupMinUnits = g.items.find(i=>i.minUnits)?.minUnits || 1;
+    // Auto-detect unit type from pack string — default to 'ct' for count items, 'lb' for weight items
+    // Unit semantics follow the CURRENTLY CHOSEN supplier — switching between
+    // e.g. a "120 CT" and a "12X3 LB" supplier re-derives type and pack options
+    const chosenItem = g.items.find(i=>i.id===currentChosen) || g.items[0];
+    const autoUnitType = (()=>{ const cpk=parsePack(chosenItem.pack, chosenItem.name, chosenItem.pieces);
+      return cpk.kind==='count' ? 'ct' : (cpk.lbsPerCase || chosenItem.perLb) ? 'lb' : 'ct'; })();
+    const groupUnitType = g.items.find(i=>i.unitType)?.unitType || autoUnitType;
+    const unitConflict  = groupMinUnits > groupMaxUnits;
+    // N X M packs can be counted per item (default) or per whole inner pack
+    const groupIpp       = parsePack(chosenItem.pack, chosenItem.name, chosenItem.pieces).itemsPerPack || 1;
+    const groupCountMode = g.items.find(i=>i.countMode)?.countMode || 'item';
+    const isWeightUT     = groupUnitType==='lb' || groupUnitType==='kg';
+
+    const aliasesIn = Object.keys(groupAlias).filter(k=>groupAlias[k]===gKey);
+    const fk0 = g.items.length ? fullKey(g.items[0].name) : null;
+    const isSplitGroup = !!(fk0 && splitItems[fk0] && gKey===fk0);
+    const naturalKey = isSplitGroup ? baseKey(g.items[0].name) : null;
+    html+=`<tr style="vertical-align:top;">
+      <td style="font-weight:500;padding-top:10px;"
+        ondragover="event.preventDefault();this.style.background='var(--green-bg)';this.style.boxShadow='inset 0 0 0 2px var(--green)';"
+        ondragleave="this.style.background='';this.style.boxShadow='';"
+        ondrop="event.preventDefault();event.stopPropagation();this.style.background='';this.style.boxShadow='';
+          const d=event.dataTransfer.getData('text/plain');
+          if(d.startsWith('split:')){ splitSupplier(parseInt(d.slice(6)),'${gKey}'); }
+          else { const src=d.startsWith('unmerge:')?d.slice(8):d;
+                 if(src&&src!=='${gKey}') mergeGroup(src,'${gKey}'); }">
+        <span draggable="true" style="cursor:grab;display:inline-flex;align-items:center;gap:4px;"
+          title="Drag onto another produce group to merge — remembered for future lists"
+          ondragstart="event.dataTransfer.setData('text/plain','${gKey}');event.dataTransfer.effectAllowed='move';">
+          <span style="color:var(--text3);font-size:11px;">&#8942;&#8942;</span>${g.key.charAt(0).toUpperCase()+g.key.slice(1)}
+        </span>
+        ${aliasesIn.map(a=>`<div draggable="true" style="font-size:10px;font-weight:400;color:var(--text3);margin-top:2px;cursor:grab;"
+          title="Drag out of the table to unmerge &ldquo;${a}&rdquo; into its own group, or onto another group to move it"
+          ondragstart="event.stopPropagation();event.dataTransfer.setData('text/plain','unmerge:${a}');event.dataTransfer.effectAllowed='move';">
+          &#8942;&#8942; &#8627; includes &ldquo;${a}&rdquo;
+          <button class="del-btn" title="Unmerge &ldquo;${a}&rdquo; back into its own group"
+            style="font-size:11px;padding:0 2px;" onclick="unmergeGroup('${a}')">&#215;</button>
+        </div>`).join('')}
+        ${isSplitGroup?`<div style="font-size:10px;font-weight:400;color:var(--text3);margin-top:2px;">
+          &#8627; split out of &ldquo;${naturalKey}&rdquo;
+          <button class="del-btn" title="Rejoin the &ldquo;${naturalKey}&rdquo; group"
+            style="font-size:11px;padding:0 2px;" onclick="unsplitSupplier('${fk0}')">&#215;</button>
+        </div>`:''}
+        <select style="font-size:10px;padding:1px 3px;margin-top:4px;display:block;max-width:130px;color:var(--text3);"
+          title="Merge this group into another — remembered for future lists"
+          onchange="if(this.value) mergeGroup('${gKey}', this.value);">
+          <option value="">merge into&hellip;</option>
+          ${groups.filter(o=>o.key!==gKey).map(o=>`<option value="${o.key}">${o.key}</option>`).join('')}
+        </select>
+      </td>
+      <td style="padding-top:10px;">
+        <select style="font-size:11px;padding:2px 4px;" onchange="applyGroupSetting('${gKey}','cat',this.value);">
+          <option value="fruit" ${repItem.cat==='fruit'?'selected':''}>Fruit</option>
+          <option value="veg"   ${repItem.cat==='veg'  ?'selected':''}>Veg</option>
+        </select>
+      </td>
+      <td style="text-align:center;padding-top:10px;">
+        <input type="checkbox" ${groupAlwaysIn?'checked':''} style="cursor:pointer;accent-color:var(--accent);"
+          onchange="applyGroupSetting('${gKey}','alwaysIn',this.checked);renderReview();" />
+      </td>
+      <td style="padding-top:10px;">
+        <div style="display:flex;gap:4px;align-items:center;">
+          <select style="font-size:11px;padding:2px 4px;" id="ftype-${gid}"
+            onchange="applyGroupSetting('${gKey}','fixedType',this.value);document.getElementById('fval-${gid}').style.display=this.value==='none'?'none':'inline-block';">
+            <option value="none" ${groupFixedType==='none'?'selected':''}>Flexible</option>
+            <option value="ct"   ${groupFixedType==='ct'  ?'selected':''}>Fixed ct</option>
+            <option value="lb"   ${groupFixedType==='lb'  ?'selected':''}>Fixed lbs</option>
+          </select>
+          <input type="number" id="fval-${gid}" value="${groupFixedVal}" placeholder="amt" min="0" step="0.5"
+            style="width:54px;font-size:11px;display:${groupFixedType==='none'?'none':'inline-block'};"
+            onchange="applyGroupSetting('${gKey}','fixedVal',parseFloat(this.value)||null);" />
+        </div>
+      </td>
+      <td style="padding-top:10px;">
+        <select style="font-size:11px;padding:2px 4px;"
+          onchange="applyGroupSetting('${gKey}','unitType',this.value);renderReview();">
+          <option value="ct" ${groupUnitType==='ct'?'selected':''}>ct</option>
+          <option value="lb" ${groupUnitType==='lb'?'selected':''}>lbs</option>
+          <option value="kg" ${groupUnitType==='kg'?'selected':''}>kg</option>
+        </select>
+        ${groupIpp>1?`<select style="font-size:10px;padding:1px 3px;margin-top:4px;display:block;max-width:100px;"
+          title="What one unit in a bag means for this ${groupIpp}-per-pack item"
+          onchange="applyGroupSetting('${gKey}','countMode',this.value);renderReview();">
+          <option value="item" ${groupCountMode!=='pack'?'selected':''}>1 of ${groupIpp}</option>
+          <option value="pack" ${groupCountMode==='pack'?'selected':''}>pack of ${groupIpp}</option>
+        </select>`:''}
+      </td>
+      <td style="padding-top:10px;">
+        <input type="number" value="${groupMinUnits}" min="0.5" step="${isWeightUT?'0.5':'1'}"
+          style="width:52px;font-size:11px;"
+          title="Min ${groupUnitType==='ct'?'units':groupUnitType==='kg'?'kg':'lbs'} of this item per bag if included"
+          onchange="(function(v){
+            const minV=parseFloat(v)||1;
+            applyGroupSetting('${gKey}','minUnits',minV);
+            const curMax=catalogue.find(i=>itemKey(i)==='${gKey}'&&i.maxUnits)?.maxUnits||null;
+            if(curMax!=null && minV>curMax) applyGroupSetting('${gKey}','maxUnits',minV);
+            renderReview();
+          })(this.value);" />
+      </td>
+      <td style="padding-top:10px;">
+        <input type="number" value="${groupMaxUnits??''}" placeholder="auto" min="0.5" step="${isWeightUT?'0.5':'1'}"
+          style="width:52px;font-size:11px;"
+          title="Max ${groupUnitType==='ct'?'units':groupUnitType==='kg'?'kg':'lbs'} of this item per bag — leave empty for flexible (optimizer decides)"
+          onchange="(function(v){
+            const maxV=parseFloat(v);
+            if(!v||isNaN(maxV)){
+              applyGroupSetting('${gKey}','maxUnits',null);
+              applyGroupSetting('${gKey}','_maxOverride',false);
+              renderReview();
+              return;
+            }
+            applyGroupSetting('${gKey}','maxUnits',maxV);
+            applyGroupSetting('${gKey}','_maxOverride',true);
+            const curMin=catalogue.find(i=>itemKey(i)==='${gKey}'&&i.minUnits)?.minUnits||${groupMinUnits};
+            if(maxV<curMin) applyGroupSetting('${gKey}','minUnits',maxV);
+            renderReview();
+          })(this.value);" />
+      </td>
+      <td style="padding:6px 6px;">
+        <div style="display:flex;flex-wrap:wrap;gap:2px;">${supplierRows}</div>
+        ${!anyPriceable?`<span class="badge badge-skip" style="margin-top:4px;">all unpriceable &mdash; group will be skipped</span>`:''}
+      </td>
+      <td style="padding-top:10px;">
+        <button class="del-btn" title="Remove group"
+          onclick="catalogue=catalogue.filter(i=>itemKey(i)!=='${gKey}');afterLoad();renderReview();">&#215;</button>
+      </td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div>`;
+  el.innerHTML=html;
+  updateSideStats();
+}
+
+/* ── Navigation ── */
+function goTo(name){
+  ['load','review','result','saved'].forEach(p=>{
+    document.getElementById('panel-'+p).classList.toggle('active',p===name);
+    const nb=document.getElementById('nav-'+p);
+    if(nb) nb.classList.toggle('active',p===name);
+  });
+  document.querySelector('.nav-btn').classList.toggle('active',name==='load');
+  if(name==='review') renderReview();
+  if(name==='saved')  renderSavedBags();
+  if(name==='result' && !lastSnapshot) renderPreRunSummary();
+}
+
+function renderPreRunSummary(){
+  const el = document.getElementById('result-area');
+  if(!catalogue.length){
+    el.innerHTML='<div class="empty-state"><big>No list loaded</big>Go to Step 1 and load your produce list first.</div>';
+    return;
+  }
+  const groups = getGroups();
+
+  const alwaysIn  = [], flexible = [], skipped = [];
+  groups.forEach(g => {
+    const priceable = g.items.filter(isPriceable);
+    const hasFixed  = g.items.some(i=>(i.fixedType==='lb'||i.fixedType==='ct')&&i.fixedVal);
+    const isAlways  = g.items.some(i=>i.alwaysIn);
+    const maxU      = g.items.find(i=>i.maxUnits)?.maxUnits ?? 'auto';
+    const minU      = g.items.find(i=>i.minUnits)?.minUnits || 1;
+    const unitType  = g.items.find(i=>i.unitType)?.unitType || 'ct';
+    const unitLabel = unitType==='lb'?'lbs':unitType==='kg'?'kg':'ct';
+    const dispName  = g.key.charAt(0).toUpperCase()+g.key.slice(1);
+    const supCount  = priceable.length;
+
+    if(!priceable.length){
+      skipped.push({name:dispName, reason:'No priceable supplier'});
+    } else if(isAlways){
+      const best = priceable.sort((a,b)=>{ const ca=parseCpl(a)||parseCpu(a)||0, cb=parseCpl(b)||parseCpu(b)||0; return ca-cb; })[0];
+      const portionStr = hasFixed
+        ? `fixed ${g.items.find(i=>i.fixedVal)?.fixedVal} ${g.items.find(i=>i.fixedVal)?.fixedType==='lb'?'lbs':'ct'}`
+        : `${minU}–${maxU} ${unitLabel}`;
+      alwaysIn.push({name:dispName, portion:portionStr, supplier:best.name, suppliers:supCount});
+    } else {
+      flexible.push({name:dispName, min:minU, max:maxU, unit:unitLabel, supplier:priceable[0].name, suppliers:supCount});
+    }
+  });
+
+  const row = (label, value, color='') =>
+    `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:.5px solid var(--border);font-size:12px;">
+      <span style="color:var(--text2);">${label}</span>
+      <span style="font-weight:500;color:${color||'var(--text)'};">${value}</span>
+    </div>`;
+
+  el.innerHTML = `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem;">
+    <div style="font-family:var(--serif);font-size:1rem;font-weight:300;margin-bottom:.75rem;">Ready to optimize</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:1rem;">
+      <div style="background:var(--green-bg);border-radius:8px;padding:.6rem .85rem;">
+        <div style="font-size:10px;color:var(--green-text);text-transform:uppercase;letter-spacing:.05em;">Always-in</div>
+        <div style="font-size:1.5rem;font-weight:500;color:var(--green-text);">${alwaysIn.length}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:.6rem .85rem;">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Flexible candidates</div>
+        <div style="font-size:1.5rem;font-weight:500;">${flexible.length}</div>
+      </div>
+      <div style="background:${skipped.length?'var(--amber-bg)':'var(--surface2)'};border-radius:8px;padding:.6rem .85rem;">
+        <div style="font-size:10px;color:${skipped.length?'var(--amber-text)':'var(--text3)'};text-transform:uppercase;letter-spacing:.05em;">Skipped</div>
+        <div style="font-size:1.5rem;font-weight:500;color:${skipped.length?'var(--amber-text)':'var(--text2)'};">${skipped.length}</div>
+      </div>
+    </div>
+
+    ${alwaysIn.length ? `
+    <div style="font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:.75rem 0 .35rem;">Always-in items</div>
+    <div style="background:var(--green-bg);border-radius:6px;padding:.5rem .75rem;">
+      ${alwaysIn.map(i=>row(`${i.name} <span style="font-size:10px;color:var(--text3);">(${i.suppliers} supplier${i.suppliers!==1?'s':''})</span>`, i.portion, 'var(--green-text)')).join('')}
+    </div>` : ''}
+
+    ${flexible.length ? `
+    <div style="font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:.75rem 0 .35rem;">Flexible candidates</div>
+    <div style="background:var(--surface2);border-radius:6px;padding:.5rem .75rem;">
+      ${flexible.map(i=>row(`${i.name} <span style="font-size:10px;color:var(--text3);">(${i.suppliers} supplier${i.suppliers!==1?'s':''})</span>`, `${i.min}–${i.max} ${i.unit}`)).join('')}
+    </div>` : ''}
+
+    ${skipped.length ? `
+    <div style="font-size:11px;font-weight:500;color:var(--amber-text);text-transform:uppercase;letter-spacing:.05em;margin:.75rem 0 .35rem;">Skipped</div>
+    <div style="background:var(--amber-bg);border-radius:6px;padding:.5rem .75rem;">
+      ${skipped.map(i=>row(i.name, i.reason, 'var(--amber-text)')).join('')}
+    </div>` : ''}
+  </div>
+  <div style="font-size:12px;color:var(--text3);text-align:center;">Hit <strong style="color:var(--text2);">Run optimizer</strong> above to generate the bag selection.</div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SAVED BAGS — session store
+══════════════════════════════════════════════════════════════ */
+let savedBags = [];
+let lastSnapshot = null;
+
+function buildDefaultBagName(snapshot){
+  const lam = document.getElementById('w-lambda').value;
+  const bal = document.getElementById('w-balance').value;
+  const cpb = snapshot.totalCpb.toFixed(2);
+  const items = snapshot.bagItems.length;
+  return `\u03bb=${lam} \u00b7 ${bal}% balance \u00b7 $${cpb}/bag \u00b7 ${items} items`;
+}
+
+function promptSaveBag(){
+  if(!lastSnapshot){ alert('No result to save. Run the optimizer first.'); return; }
+  const defaultName = buildDefaultBagName(lastSnapshot);
+  const name = window.prompt('Name this bag:', defaultName);
+  if(name === null) return;
+  savedBags.push({
+    id: Date.now(),
+    name: name.trim() || defaultName,
+    timestamp: new Date().toLocaleTimeString(),
+    snapshot: JSON.parse(JSON.stringify(lastSnapshot))
+  });
+  updateSavedBadge();
+  const btn = document.getElementById('save-bag-btn');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '&#10003; Saved!';
+  btn.style.color = 'var(--green)'; btn.style.borderColor = 'var(--green)';
+  setTimeout(()=>{ btn.innerHTML=orig; btn.style.color=''; btn.style.borderColor=''; }, 1500);
+}
+
+function deleteSavedBag(id){
+  savedBags = savedBags.filter(b=>b.id!==id);
+  updateSavedBadge();
+  renderSavedBags();
+}
+
+function clearSavedBags(){
+  if(!confirm('Clear all saved bags?')) return;
+  savedBags = [];
+  updateSavedBadge();
+  renderSavedBags();
+}
+
+function updateSavedBadge(){
+  const badge = document.getElementById('saved-count-badge');
+  const clearBtn = document.getElementById('clear-saved-btn');
+  badge.textContent = savedBags.length;
+  badge.style.display = savedBags.length ? 'inline' : 'none';
+  if(clearBtn) clearBtn.style.display = savedBags.length ? 'inline-block' : 'none';
+  persistState();
+}
+
+function renderSavedBags(){
+  const el = document.getElementById('saved-bags-area');
+  if(!savedBags.length){
+    el.innerHTML='<div class="empty-state"><big>No bags saved yet</big>Run the optimizer, then click &ldquo;+ Save this bag&rdquo; to save a result here.</div>';
+    return;
+  }
+  el.innerHTML = savedBags.map(bag => {
+    const s = bag.snapshot;
+    const inBand = s.inBand;
+    const bc = inBand ? 'var(--green)' : 'var(--amber)';
+    const cardId = `sc-${bag.id}`;
+
+    const itemRows = s.bagItems.map(i=>`
+      <div class="result-row">
+        <span class="rname">${i.name}</span>
+        <span class="badge badge-${i.cat}">${i.cat}</span>
+        ${i.isFixed?'<span class="badge badge-fixed">fixed</span>':i.forcedIn?'<span class="badge badge-fixed">always-in</span>':i.isManual?'<span class="badge badge-fixed">pinned</span>':'<span class="badge badge-auto">optimized</span>'}
+        <span class="rsub">${i.portionLabel}</span>
+        <span class="rprice">$${(i.cpb||0).toFixed(3)}</span>
+      </div>`).join('');
+
+    const purchaseRows = s.purchaseRows.map(r=>`
+      <div class="result-row">
+        <span class="rname">${r.name}</span>
+        <span class="rsub">${r.buyDesc}</span>
+        <span class="rprice">$${r.totalCost.toFixed(2)}</span>
+      </div>`).join('');
+
+    const metrics = [
+      ['Fruits / Veg', `${s.bagItems.filter(i=>i.cat==='fruit').length} / ${s.bagItems.filter(i=>i.cat==='veg').length}`],
+      ['Cost / bag',   `$${s.totalCpb.toFixed(2)}`],
+      ['Total outlay', `$${s.totalPurchase.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+      ['Revenue',      `$${s.revenue.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+      ['Profit',       `$${s.profit.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+      ['Solver',       s.solverStatus==='fixed-only'?'Fixed only':'HiGHS'],
+      ['Settings',     s.settingsLabel||'—'],
+    ];
+
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:1rem;overflow:hidden;">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;gap:.6rem;padding:.8rem 1rem;cursor:pointer;user-select:none;"
+        onclick="const d=document.getElementById('${cardId}');d.style.display=d.style.display==='none'?'block':'none';">
+        <span style="font-family:var(--serif);font-size:.95rem;font-weight:300;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${bag.name}">${bag.name}</span>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap;">${bag.timestamp}</span>
+        <span style="font-size:12px;font-weight:500;color:${bc};white-space:nowrap;">$${s.totalCpb.toFixed(2)}/bag</span>
+        <span style="font-size:11px;color:${s.margin>=0?'var(--green)':'var(--red)'};white-space:nowrap;">${s.margin.toFixed(1)}%</span>
+        <span style="font-size:11px;color:var(--text3);">&#9660;</span>
+        <button class="del-btn" onclick="event.stopPropagation();deleteSavedBag(${bag.id});" title="Delete" style="font-size:14px;padding:0 5px;flex-shrink:0;">&#215;</button>
+      </div>
+
+      <!-- Metrics strip -->
+      <div style="display:flex;flex-wrap:wrap;border-top:1px solid var(--border);background:var(--surface2);">
+        ${metrics.map(([label,val])=>`
+          <div style="padding:.4rem .75rem;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-width:80px;">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">${label}</div>
+            <div style="font-size:12px;font-weight:500;color:var(--text);">${val}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Expandable body -->
+      <div id="${cardId}" style="display:none;padding:1rem;">
+        <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em;">Per-bag contents</div>
+        ${itemRows}
+        <div class="result-row" style="border-top:1px solid var(--border2);margin-top:4px;">
+          <span class="rname" style="font-weight:500;">Total per bag</span>
+          <span class="rprice" style="font-size:1rem;color:${bc};">$${s.totalCpb.toFixed(2)}</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--text2);margin:.85rem 0 .5rem;text-transform:uppercase;letter-spacing:.05em;">Bulk purchase order &mdash; ${s.bags} customers</div>
+        ${purchaseRows}
+        <div class="result-row" style="border-top:1px solid var(--border2);margin-top:4px;">
+          <span class="rname" style="font-weight:500;">Total outlay</span>
+          <span class="rprice" style="font-size:1rem;">$${s.totalPurchase.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Case geometry for the LP's waste model: perBagUnit = lbs (weight) or 1
+   (count) per portion unit; perCase = lbs or units per purchased case ── */
+function caseParams(sup){
+  const pk=parsePack(sup.pack, sup.name, sup.pieces);
+  if(sup.minLbs) return {perBagUnit:sup.minLbs, perCase:pk.lbsPerCase||1};
+  return {perBagUnit:unitItems(sup), perCase:pk.units||1};
+}
+
+function runAlgo(){
+  _runAlgoAsync().catch(err=>{
+    document.getElementById('result-area').innerHTML=`<div class="warning-box">Solver error: ${err.message}</div>`;
+  });
+}
+
+async function _runAlgoAsync(){
+  const bags      = parseInt(document.getElementById('s-bags').value)||385;
+  const salePrice = parseFloat(document.getElementById('s-sale').value)||15;
+  const lambdaRaw = parseFloat(document.getElementById('w-lambda').value);
+  const lambda    = Number.isFinite(lambdaRaw) ? lambdaRaw : 4; // ||4 would turn λ=0 into 4
+  const minFrac   = parseFloat(document.getElementById('w-balance').value)/100||0.30;
+  const TARGET_LOW  = salePrice - 0.15;
+  const TARGET_HIGH = salePrice + 0.15;
+
+  const el = document.getElementById('result-area');
+  if(!catalogue.length){
+    el.innerHTML='<div class="empty-state"><big>No list loaded</big>Go to Step 1 and load your produce list first.</div>';
+    return;
+  }
+
+  // Validate min/max units — block if any group has an explicit max below its min
+  const invalidGroups = getGroups().filter(g => {
+    const maxU = g.items.find(i=>i.maxUnits)?.maxUnits || null;
+    const minU = g.items.find(i=>i.minUnits)?.minUnits || 1;
+    return maxU!=null && minU > maxU;
+  });
+  if(invalidGroups.length){
+    const names = invalidGroups.map(g=>g.key.charAt(0).toUpperCase()+g.key.slice(1)).join(', ');
+    el.innerHTML=`<div class="warning-box">
+      <strong>&#9888; Invalid unit settings</strong><br>
+      The following groups have a minimum unit value greater than the maximum: <strong>${names}</strong>.<br>
+      Please fix these in the Review screen before optimizing.
+    </div>`;
+    goTo('result');
+    return;
+  }
+
+  el.innerHTML='<div class="empty-state"><big>Building LP&#x2026;</big>Preparing problem for HiGHS solver.</div>';
+
+  /* ══════════════════════════════════════════════════════════════
+     STEP 1 — Build groups, separate always-in from candidates
+  ══════════════════════════════════════════════════════════════ */
+  const groups = getGroups();
+  const unpriceable = [], alwaysInItems = [], candidateGroups = [];
+
+  groups.forEach(g => {
+    const priceable = g.items.filter(isPriceable);
+    if(!priceable.length){ g.items.forEach(i=>unpriceable.push(i)); return; }
+
+    const suppliers = priceable.map(i => {
+      const cpl=parseCpl(i), cpu=parseCpu(i), us=parseUnitSize(i);
+      const kind=parsePack(i.pack, i.name, i.pieces).kind;
+      const fixedType=i.fixedType||'none', fixedVal=i.fixedVal||null;
+      let cpb;
+      if(fixedType==='lb'&&fixedVal)      cpb=(cpl||0)*fixedVal;
+      else if(fixedType==='ct'&&fixedVal) cpb=(cpu||0)*fixedVal;
+      else if(us.lbs)                     cpb=(cpl||0)*us.lbs;
+      else                                cpb=cpu||0;
+      return {...i, cpl, cpu, us, kind, minLbs:us.lbs||null, cpb, fixedType, fixedVal};
+    }).filter(i=>i.cpb>0&&!isNaN(i.cpb)).sort((a,b)=>a.cpb-b.cpb);
+
+    if(!suppliers.length) return;
+
+    const groupAlwaysIn  = g.items.some(i=>i.alwaysIn);
+    const groupAppeal    = Math.max(...suppliers.map(i=>i.appeal));
+    // Only an explicit user pin locks the supplier — the auto-selected cheapest
+    // (shown with ★ in Review) leaves the solver free to choose.
+    const overrideId     = userLockedSupplier[g.key];
+    const lockedSupplier = overrideId ? suppliers.find(i=>i.id===overrideId)||null : null;
+    const repSup         = lockedSupplier || suppliers[0];
+    const autoUT         = repSup.minLbs ? 'lb' : (repSup.cpu!=null ? 'ct' : (repSup.cpl ? 'lb' : 'ct'));
+    const groupUnitType  = g.items.find(i=>i.unitType)?.unitType || autoUT;
+    // Sanitise unit bounds to what the integer LP can express: half-lb steps
+    // for groups with a scoopable bulk supplier, whole units otherwise.
+    // kg entries are converted to lbs here — the solver always works in lbs.
+    const hasBulk = suppliers.some(s=>s.kind==='bulk');
+    let groupMaxUnits = g.items.find(i=>i.maxUnits)?.maxUnits || null; // null = flexible
+    let groupMinUnits = g.items.find(i=>i.minUnits)?.minUnits || 1;
+    if((groupUnitType==='lb'||groupUnitType==='kg') && hasBulk){
+      const f = groupUnitType==='kg' ? KG : 1;
+      if(groupMaxUnits!=null) groupMaxUnits = Math.max(0.5, Math.round(groupMaxUnits*f*2)/2);
+      groupMinUnits = Math.max(0.5, Math.round(groupMinUnits*f*2)/2);
+    } else {
+      if(groupMaxUnits!=null) groupMaxUnits = Math.max(1, Math.round(groupMaxUnits));
+      groupMinUnits = Math.max(1, Math.round(groupMinUnits));
+    }
+    // No explicit max → flexible: cap only at what could ever fit in the band,
+    // so the bound never binds before band_hi does. λ governs stacking instead.
+    if(groupMaxUnits==null){
+      const minCpb = Math.max(suppliers[0].cpb, 0.01); // sorted ascending → cheapest
+      groupMaxUnits = Math.max(groupMinUnits, Math.ceil(TARGET_HIGH/minCpb));
+    }
+    if(groupMaxUnits < groupMinUnits) groupMaxUnits = groupMinUnits;
+
+    if(groupAlwaysIn){
+      const hasFixedPortion = suppliers.some(s => (s.fixedType==='lb'||s.fixedType==='ct') && s.fixedVal);
+      if(hasFixedPortion){
+        // Fixed portion — pull out of LP entirely, use exact fixed amount
+        const best = lockedSupplier||suppliers[0];
+        let aiCpb = best.cpb;
+        if(best.fixedType==='lb'&&best.fixedVal)      aiCpb=(best.cpl||0)*best.fixedVal;
+        else if(best.fixedType==='ct'&&best.fixedVal) aiCpb=(best.cpu||0)*best.fixedVal;
+        else if(best.minLbs)                          aiCpb=(best.cpl||0)*best.minLbs;
+        else                                          aiCpb=(best.cpu||0)*(groupMinUnits||1);
+        alwaysInItems.push({...best, cpb:aiCpb, minUnits:groupMinUnits||1});
+      } else {
+        candidateGroups.push({
+          key:g.key, cat:g.cat||g.items[0].cat, appeal:groupAppeal,
+          maxUnits:groupMaxUnits, minUnits:groupMinUnits, unitType:groupUnitType,
+          suppliers, lockedSupplier, cheapest:suppliers[0], forcedIn: true
+        });
+      }
+    } else {
+      candidateGroups.push({
+        key:g.key, cat:g.cat||g.items[0].cat, appeal:groupAppeal,
+        maxUnits:groupMaxUnits, minUnits:groupMinUnits, unitType:groupUnitType,
+        suppliers, lockedSupplier, cheapest:suppliers[0], forcedIn: false
+      });
+    }
+  });
+
+  /* ══════════════════════════════════════════════════════════════
+     STEP 2 — Always-in cost
+  ══════════════════════════════════════════════════════════════ */
+  const alwaysInCost = alwaysInItems.reduce((s,i)=>s+i.cpb, 0);
+  if(alwaysInCost > TARGET_HIGH){
+    el.innerHTML=`<div class="warning-box">Fixed items alone cost <strong>$${alwaysInCost.toFixed(2)}</strong> &mdash; exceeds $${TARGET_HIGH.toFixed(2)} limit. Reduce fixed portions in Review.</div>`;
+    return;
+  }
+  const flexLo = Math.max(0, TARGET_LOW  - alwaysInCost);
+  const flexHi = Math.max(0, TARGET_HIGH - alwaysInCost);
+
+  if(candidateGroups.length===0){
+    await renderFinalResults({alwaysInItems, selectedGroups:[], skippedGroups:[], unpriceable, bags, salePrice, TARGET_LOW, TARGET_HIGH, solverStatus:'fixed-only', el});
+    return;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     STEP 3 — Build LP string dynamically from candidateGroups
+     Variables:
+       x_G      {0,1}      include group G
+       z_G_K    Z≥0        portion increments of group G from supplier K
+                           (half-lbs for bulk-weight suppliers, units otherwise;
+                            S_GK = increments per unit, so units = z/S)
+       s_G_K    {0,1}      supplier K chosen (multi-supplier groups only)
+       q_G_K    Z≥0        whole cases bought (case-only suppliers — waste model)
+
+     Objective: Minimize    (netStack_GK = (LAMBDA_SCALE·λ − (1−λ/10)·appeal_G·STACK_VALUE)·cpb_GK,
+                             i.e. stacking cost/reward is per DOLLAR, not per unit)
+       -(appeal_G + netPen_Grep·Mlo) × x_G     (credit: minimum units aren't "stacking")
+       + (netPen_GK/S − VALUE_NUDGE·cpb/S) × z_GK  (stacking cost, band-top preference)
+       + WASTE_PEN × (casePrice·q_GK − caseRate·need·z_GK)   (case overage only)
+     Constraints:
+       [band_lo]   Σ (cpb_GK/S) × z_GK >= flexLo
+       [band_hi]   Σ (cpb_GK/S) × z_GK <= flexHi
+       [lb_G]      Σ_K z_GK/S >= Mlo × x_G
+       [ub_G]      Σ_K z_GK/S <= M_G × x_G
+       [os_G_K]    z_GK <= S·M_G × s_GK
+       [os_sum_G]  Σ_K s_GK = x_G
+       [case_G_K]  perCase × q_GK >= need × z_GK   (case-only suppliers)
+       [forced_G]  x_G = 1  (always-in flexible)
+       [bal_fruit/veg] whole-bag balance floors (fixed items as constants)
+  ══════════════════════════════════════════════════════════════ */
+  const vn = str => str.replace(/[^a-zA-Z0-9]/g,'_');
+  const xn = g     => `x_${vn(g.key)}`;
+  const zn = (g,k) => `z_${vn(g.key)}_s${k}`;
+  const sn = (g,k) => `s_${vn(g.key)}_s${k}`;
+  const qn = (g,k) => `q_${vn(g.key)}_s${k}`;
+  const supps  = g => g.lockedSupplier ? [g.lockedSupplier] : g.suppliers;
+  // z_GK counts half-lb increments for scoopable bulk-weight suppliers in
+  // weight (lb/kg) groups, whole units otherwise. kg bounds were already
+  // converted to lbs at group build.
+  const zScale = (g,sup) => ((g.unitType==='lb'||g.unitType==='kg') && sup.kind==='bulk') ? 2 : 1;
+
+  // Secondary objective weights — sized as tiebreakers well below appeal
+  // (±1 per item) and λ (per unit):
+  const VALUE_NUDGE = 0.2;   // prefer bags near the TOP of the band: most produce per $15
+  const WASTE_PEN   = 0.005; // prefer selections leaving less unused produce in opened cases
+  const STACK_VALUE  = 1.0;  // at λ=0 a dollar of extra units earns the FULL appeal a dollar
+                             // of a new item would — "no duplicate penalty" means a duplicate
+                             // is as good as a fresh unit. Fades linearly to 0 at λ=10.
+  const LAMBDA_SCALE = 0.25; // $-penalty per dial step — sized so the variety transition
+                             // spans the whole dial instead of saturating by λ≈3 (picked by
+                             // sweeping 6 real weekly sheets × fixed/no-fixed configs)
+
+  let objTerms=[], constraints=[], bounds=[], generals=[];
+
+  candidateGroups.forEach(g => {
+    const M   = g.maxUnits;
+    const Mlo = Math.min(g.minUnits||1, M);
+    // Net cost of stacking, priced PER DOLLAR spent: the dial taxes every extra
+    // dollar put into a group, while a share of the group's appeal rewards it —
+    // extra units of a liked item still add value to the bag. At 10 extras earn
+    // nothing (strict variety); at 0 a dollar of extras earns a FULL dollar's
+    // worth of appeal, so the bag visibly consolidates into crowd-pleasers.
+    // LAMBDA_SCALE stretches the transition across the whole 0–10 dial: with
+    // the raw slider value as the penalty, "fully varied" was reached by ≈3 and
+    // detents 4–10 were dead (verified on the June 12 sheet). 0.35·λ with a
+    // linear fade keeps every step up to ≈8 changing the bag.
+    // Per-dollar (×cpb) matters: per-unit terms would make dirt-cheap items
+    // (garlic bulbs) unbeatable and fill the bag with 50 of them, and without
+    // the appeal share group appeal (±5–10) dwarfs any stacking term and the
+    // slider can never change the outcome at all.
+    const stackShare = (1 - lambda/10)*g.appeal*STACK_VALUE;
+    const netStack   = LAMBDA_SCALE*lambda - stackShare;
+    const rep = g.lockedSupplier || g.cheapest;
+    // The stacking term is charged on every z unit below, so credit the
+    // mandatory minimum back here — only units BEYOND it count as stacking.
+    objTerms.push(`${(-(g.appeal + netStack*rep.cpb*Mlo)).toFixed(4)} ${xn(g)}`);
+    supps(g).forEach((sup,k) => {
+      const S = zScale(g,sup);
+      let zCoef = netStack*sup.cpb/S - VALUE_NUDGE*sup.cpb/S;
+      if(sup.unitsAvailable === false){
+        // Case-waste model: this supplier only sells whole cases. q_GK = cases
+        // bought; the objective pays WASTE_PEN × (case spend − exact-need spend),
+        // i.e. only the overage. q's own positive cost pins it to the ceiling.
+        const cp   = caseParams(sup);
+        const need = cp.perBagUnit*bags/S;   // lbs (or units) needed per z increment
+        const qMax = Math.ceil(cp.perBagUnit*M*bags/cp.perCase)+1;
+        const caseRate = sup.casePrice/cp.perCase;
+        constraints.push(` case_${vn(g.key)}_${k}: ${cp.perCase.toFixed(6)} ${qn(g,k)} - ${need.toFixed(6)} ${zn(g,k)} >= 0`);
+        bounds.push(` 0 <= ${qn(g,k)} <= ${qMax}`);
+        generals.push(qn(g,k));
+        objTerms.push(`${(WASTE_PEN*sup.casePrice).toFixed(6)} ${qn(g,k)}`);
+        zCoef -= WASTE_PEN*caseRate*need;
+      }
+      objTerms.push(`${zCoef.toFixed(6)} ${zn(g,k)}`);
+    });
+  });
+
+  if(flexLo > 0){
+    const terms = candidateGroups.flatMap(g =>
+      supps(g).map((sup,k) => `${(sup.cpb/zScale(g,sup)).toFixed(6)} ${zn(g,k)}`)).join(' + ');
+    constraints.push(` band_lo: ${terms} >= ${flexLo.toFixed(6)}`);
+  }
+  {
+    const terms = candidateGroups.flatMap(g =>
+      supps(g).map((sup,k) => `${(sup.cpb/zScale(g,sup)).toFixed(6)} ${zn(g,k)}`)).join(' + ');
+    constraints.push(` band_hi: ${terms} <= ${flexHi.toFixed(6)}`);
+  }
+
+  candidateGroups.forEach(g => {
+    const suppList = supps(g);
+    const M   = g.maxUnits;
+    const Mlo = Math.min(g.minUnits||1, M); // min units or lbs depending on unitType
+    const sumZ = suppList.map((sup,k) => `${(1/zScale(g,sup)).toFixed(4)} ${zn(g,k)}`).join(' + ');
+    constraints.push(` lb_${vn(g.key)}: ${sumZ} - ${Mlo} ${xn(g)} >= 0`);
+    constraints.push(` ub_${vn(g.key)}: ${sumZ} - ${M} ${xn(g)} <= 0`);
+    if(suppList.length > 1){
+      suppList.forEach((sup,k) => constraints.push(` os_${vn(g.key)}_${k}: ${zn(g,k)} - ${Math.floor(zScale(g,sup)*M)} ${sn(g,k)} <= 0`));
+      constraints.push(` os_${vn(g.key)}_sum: ${suppList.map((_,k)=>sn(g,k)).join(' + ')} - ${xn(g)} = 0`);
+      suppList.forEach((_,k) => { bounds.push(` 0 <= ${sn(g,k)} <= 1`); generals.push(sn(g,k)); });
+    }
+    bounds.push(` 0 <= ${xn(g)} <= 1`);
+    generals.push(xn(g));
+    if(g.forcedIn) constraints.push(` forced_${vn(g.key)}: ${xn(g)} = 1`);
+    suppList.forEach((sup,k) => { bounds.push(` 0 <= ${zn(g,k)} <= ${Math.floor(zScale(g,sup)*M)}`); generals.push(zn(g,k)); });
+  });
+
+  // Whole-bag fruit/veg balance — always-in fixed items count as constants,
+  // so the floor applies to the bag the customer actually receives.
+  const nFixedFruit = alwaysInItems.filter(i=>i.cat==='fruit').length;
+  const nFixedVeg   = alwaysInItems.length - nFixedFruit;
+  const fTerms = candidateGroups.map(g => `${(g.cat==='fruit'?(1-minFrac):(-minFrac)).toFixed(4)} ${xn(g)}`).join(' + ');
+  const vTerms = candidateGroups.map(g => `${(g.cat==='veg'  ?(1-minFrac):(-minFrac)).toFixed(4)} ${xn(g)}`).join(' + ');
+  constraints.push(` bal_fruit: ${fTerms} >= ${(minFrac*alwaysInItems.length - nFixedFruit).toFixed(4)}`);
+  constraints.push(` bal_veg:   ${vTerms} >= ${(minFrac*alwaysInItems.length - nFixedVeg).toFixed(4)}`);
+
+  const lpStr = [
+    `\\ Produce Bag Optimizer ${new Date().toLocaleDateString()}`,
+    `\\ Groups:${candidateGroups.length} FixedCost:$${alwaysInCost.toFixed(3)} FlexBand:[$${flexLo.toFixed(3)},$${flexHi.toFixed(3)}]`,
+    'Minimize',
+    ' obj: ' + objTerms.join(' + '),
+    'Subject To', ...constraints,
+    'Bounds',     ...bounds,
+    'Generals',   ' ' + generals.join(' '),
+    'End'
+  ].join('\n');
+
+  /* ══════════════════════════════════════════════════════════════
+     STEP 4 — Solve with HiGHS
+  ══════════════════════════════════════════════════════════════ */
+  el.innerHTML='<div class="empty-state"><big>Solving&#x2026;</big>HiGHS is finding the optimal bag selection.</div>';
+  let selectedGroups=[], solverStatus;
+
+  try {
+    if(!window._highsInstance){
+      if(!window._highsLoaded){
+        await new Promise((resolve,reject)=>{
+          const s = document.createElement('script');
+          s.src = './highs.js';
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('highs.js not found — place highs.js and highs.wasm next to the HTML file'));
+          document.head.appendChild(s);
+        });
+        window._highsLoaded = true;
+      }
+      const loader = window.Module;
+      if(typeof loader !== 'function') throw new Error('HiGHS loader (window.Module) not found after script load');
+      window._highsInstance = await loader({ locateFile: f => `./${f}` });
+    }
+
+    const result = window._highsInstance.solve(lpStr, {
+      output_flag: false,
+      mip_rel_gap: 0.001,
+      time_limit:  30.0
+    });
+
+    solverStatus = result.Status || result.status || 'Optimal';
+    const cols   = result.Columns || {};
+
+    candidateGroups.forEach(g => {
+      const xVal = (cols[xn(g)]||{}).Primal||0;
+      if(xVal < 0.5) return;
+      const suppList = supps(g);
+      let chosenSup=null, chosenUnits=0;
+      suppList.forEach((sup,k) => {
+        const zVal = Math.round((cols[zn(g,k)]||{}).Primal||0);
+        if(zVal > 0){ chosenSup=sup; chosenUnits=zVal/zScale(g,sup); }
+      });
+      if(!chosenSup){ chosenSup=suppList[0]; chosenUnits=Math.max(g.minUnits||1,1); }
+      selectedGroups.push({
+        ...g,
+        chosen:     {...chosenSup},
+        portion:    chosenSup.minLbs ? chosenSup.minLbs*chosenUnits : chosenUnits,
+        unitCount:  chosenUnits,
+        lockedSupplier: g.lockedSupplier
+      });
+    });
+
+  } catch(err){
+    el.innerHTML=`<div class="warning-box">
+      <strong>&#9888; Solver unavailable</strong><br>
+      ${err.message}<br>
+      The optimizer needs <code>highs.js</code> and <code>highs.wasm</code> next to this HTML file. Fix that and run again.
+    </div>`;
+    return;
+  }
+
+  const skippedGroups = candidateGroups.filter(g => !selectedGroups.find(s=>s.key===g.key));
+  await renderFinalResults({alwaysInItems, selectedGroups, skippedGroups, unpriceable, bags, salePrice, TARGET_LOW, TARGET_HIGH, solverStatus, el});
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RENDER RESULTS
+══════════════════════════════════════════════════════════════ */
+/* Label n count-units for a bag item, honouring the unit's real name
+   ("pack of 5", "pint") and showing pack context for N X M items counted
+   individually ("1 ct (packs of 5)"). */
+function countLabel(n, i){
+  const usLabel = (i.us || parseUnitSize(i)).label;
+  if(usLabel && usLabel!=='1 ct' && usLabel!=='1 unit'){
+    return n>1 ? `${n} &times; ${usLabel.replace(/^1 /,'')}` : usLabel;
+  }
+  const pk = parsePack(i.pack, i.name, i.pieces);
+  const hint = (pk.itemsPerPack>1 && unitItems(i)===1) ? ` (packs of ${pk.itemsPerPack})` : '';
+  return `${n} ct${hint}`;
+}
+
+async function renderFinalResults({alwaysInItems, selectedGroups, skippedGroups, unpriceable, bags, salePrice, TARGET_LOW, TARGET_HIGH, solverStatus, el}){
+
+  // Build unified bag item list
+  const bagItems = [
+    ...alwaysInItems.map(i => {
+      let portionLabel, cpb;
+      if(i.fixedType==='lb'&&i.fixedVal){ portionLabel=`${i.fixedVal} lbs`; cpb=(i.cpl||0)*i.fixedVal; }
+      else if(i.fixedType==='ct'&&i.fixedVal){ portionLabel=countLabel(i.fixedVal, i); cpb=(i.cpu||0)*i.fixedVal; }
+      else if(i.minLbs){ portionLabel=i.minLbs?`${i.minLbs} lbs`:`1 lbs`; cpb=(i.cpl||0)*i.minLbs; }
+      else { const u=i.minUnits||1; portionLabel=countLabel(u, i); cpb=(i.cpu||0)*u; }
+      return {...i, isFixed:true, isManual:false, portionLabel, cpb, unitsAvailable:i.unitsAvailable!==false};
+    }),
+    ...selectedGroups.map(g => {
+      const i   = g.chosen;
+      // weight vs count semantics follow the bag unit (minLbs), NOT whether a
+      // per-lb price happens to exist — a "30 CT / 15 LB" item priced per lb
+      // on the sheet is still shared and costed by count
+      const cpb = i.minLbs!=null ? (i.cpl||0)*g.portion : (i.cpu||0)*g.unitCount;
+      const portionLabel = i.minLbs!=null
+        ? (i.minLbs===1 && g.unitType==='kg' ? `${(g.portion/KG).toFixed(1)} kg`
+           : i.minLbs===1 ? `${g.portion} lbs`
+           : g.unitCount>1 ? `${g.unitCount} &times; ${i.us.label}` : i.us.label)
+        : g.unitType==='lb'
+          ? `${g.unitCount} lbs`
+          : countLabel(g.unitCount, i);
+      return {...i, isFixed:false, isManual:!!g.lockedSupplier, forcedIn:!!g.forcedIn, portionLabel, cpb,
+              portion:g.portion, unitCount:g.unitCount, suppliers:g.suppliers, key:g.key,
+              unitsAvailable:i.unitsAvailable!==false};
+    })
+  ];
+
+  const totalCpb = bagItems.reduce((s,i)=>s+(i.cpb||0), 0);
+  const inBand   = totalCpb >= TARGET_LOW - 0.001 && totalCpb <= TARGET_HIGH + 0.001;
+  const bc       = inBand ? 'var(--green)' : 'var(--amber)';
+
+  // Purchase order — floor cases + loose units when supplier allows, else ceil
+  const purchaseRows = bagItems.map(i => {
+    let totalCost, buyDesc;
+    const pk = parsePack(i.pack, i.name, i.pieces);
+    const canBuyUnits = i.unitsAvailable !== false; // default true
+
+    // Helper: compute floor cases + loose for weight items
+    function floorCasesPlusLoose(totalLbs, lpc, casePrice, unitPricePerLb){
+      const cases     = Math.floor(totalLbs / lpc);
+      const looseLbs  = parseFloat((totalLbs - cases * lpc).toFixed(4));
+      const caseCost  = cases * casePrice;
+      const looseCost = looseLbs * (unitPricePerLb || (casePrice/lpc));
+      return { cases, looseLbs, totalCost: caseCost + looseCost,
+               buyDesc: looseLbs > 0.001
+                 ? `${cases} case${cases!==1?'s':''} + ${looseLbs.toFixed(2)} lbs`
+                 : `${cases} case${cases!==1?'s':''}` };
+    }
+
+    // Helper: weight items sold as N inner packs (40X12 OZ, 12X3 LB): the loose
+    // top-up must be WHOLE packs — you can order 7 bags of 12 oz, not 5.25
+    // loose lbs. unitPricePerPack is the sheet's per-pack price.
+    function floorCasesPlusLoosePacks(totalLbs, pk, casePrice, unitPricePerPack){
+      const totalPacks = Math.ceil(totalLbs/pk.lbsPerUnit - 1e-9);
+      const cases      = Math.floor(totalPacks/pk.units);
+      const loosePacks = totalPacks - cases*pk.units;
+      const pricePerPack = unitPricePerPack || casePrice/pk.units;
+      // unitLabel is "1 pack (12 oz)" / "1 bag (3 lb)" → "7 packs of 12 oz"
+      const lm = pk.unitLabel.match(/^1 (\w+) \((.+)\)$/);
+      const looseDesc = lm ? `${loosePacks} ${lm[1]}${loosePacks!==1?'s':''} of ${lm[2]}`
+                           : `${loosePacks} &times; ${pk.unitLabel.replace(/^1 /,'')}`;
+      return { totalCost: cases*casePrice + loosePacks*pricePerPack,
+               buyDesc: loosePacks > 0
+                 ? `${cases} case${cases!==1?'s':''} + ${looseDesc}`
+                 : `${cases} case${cases!==1?'s':''}` };
+    }
+
+    // Helper: compute floor cases + loose for count items. Loose buys happen in
+    // whole INNER PACKS (you can order 37 garlic sleeves, not 185 bulbs);
+    // unitPricePer is the sheet's per-pack price.
+    function floorCasesPlusLooseCount(totalUnits, upc, casePrice, unitPricePer, ipp){
+      ipp = ipp || 1;
+      const packsPerCase = upc / ipp;
+      const pricePerPack = unitPricePer || (casePrice/packsPerCase);
+      const cases      = Math.floor(totalUnits / upc);
+      const loosePacks = Math.ceil((totalUnits - cases*upc) / ipp);
+      return { cases, loosePacks, totalCost: cases*casePrice + loosePacks*pricePerPack,
+               buyDesc: loosePacks > 0
+                 ? `${cases} case${cases!==1?'s':''} + ${loosePacks} ${ipp>1?`pack${loosePacks!==1?'s':''} of ${ipp}`:'ct'}`
+                 : `${cases} case${cases!==1?'s':''}` };
+    }
+
+    if(i.fixedType==='ct'&&i.fixedVal){
+      const upc=(pk.kind==='count'||pk.kind==='wpack')?pk.units:1;
+      const totalUnits = i.fixedVal*unitItems(i)*bags;
+      if(canBuyUnits){
+        const r = floorCasesPlusLooseCount(totalUnits, upc, i.casePrice, (!i.perLb&&i.unitPrice)||null, pk.itemsPerPack);
+        totalCost=r.totalCost; buyDesc=r.buyDesc;
+      } else {
+        const cs=Math.ceil(totalUnits/upc);
+        totalCost=cs*i.casePrice; buyDesc=`${cs} case${cs!==1?'s':''} of ${upc} ct`;
+      }
+    } else if(i.fixedType==='lb'&&i.fixedVal){
+      const totalLbs=i.fixedVal*bags;
+      const lpc=pk.lbsPerCase||1;
+      if(canBuyUnits && pk.kind==='wpack'){
+        const r = floorCasesPlusLoosePacks(totalLbs, pk, i.casePrice, (!i.perLb&&i.unitPrice)||null);
+        totalCost=r.totalCost; buyDesc=r.buyDesc;
+      } else if(canBuyUnits){
+        const r = floorCasesPlusLoose(totalLbs, lpc, i.casePrice, i.cpl||i.unitPrice);
+        totalCost=r.totalCost; buyDesc=r.buyDesc;
+      } else {
+        const cs=Math.ceil(totalLbs/lpc);
+        totalCost=cs*i.casePrice; buyDesc=`${cs} case${cs!==1?'s':''}`;
+      }
+    } else if(i.cpl && i.portion && i.minLbs!=null){
+      const totalLbs=i.portion*bags;
+      const lpc=pk.lbsPerCase||1;
+      const lbsNote = totalLbs>0?` &middot; ${totalLbs.toFixed(1)} lbs total`:'';
+      if(canBuyUnits && pk.kind==='wpack'){
+        const r = floorCasesPlusLoosePacks(totalLbs, pk, i.casePrice, (!i.perLb&&i.unitPrice)||null);
+        totalCost=r.totalCost; buyDesc=r.buyDesc+lbsNote;
+      } else if(canBuyUnits){
+        const r = floorCasesPlusLoose(totalLbs, lpc, i.casePrice, i.cpl||i.unitPrice);
+        totalCost=r.totalCost; buyDesc=r.buyDesc+lbsNote;
+      } else {
+        const cs=Math.ceil(totalLbs/lpc);
+        totalCost=cs*i.casePrice; buyDesc=`${cs} case${cs!==1?'s':''}${lbsNote}`;
+      }
+    } else {
+      const totalUnits=(i.unitCount||1)*unitItems(i)*bags;
+      const upc=pk.units||1;
+      if(canBuyUnits){
+        const r = floorCasesPlusLooseCount(totalUnits, upc, i.casePrice, (!i.perLb&&i.unitPrice)||null, pk.itemsPerPack);
+        totalCost=r.totalCost; buyDesc=r.buyDesc;
+      } else {
+        const cs=Math.ceil(totalUnits/upc);
+        totalCost=cs*i.casePrice; buyDesc=`${cs} case${cs!==1?'s':''}`;
+      }
+    }
+    return {...i, totalCost, buyDesc};
+  });
+
+  const revenue = salePrice * bags;
+  const totalPurchase = purchaseRows.reduce((s,r)=>s+r.totalCost, 0);
+  const profit  = revenue - totalPurchase;
+  const margin  = (profit / revenue) * 100;
+
+  // Store snapshot for saving
+  const settingsLabel = `\u03bb=${document.getElementById('w-lambda').value} \u00b7 ${document.getElementById('w-balance').value}% bal`;
+  lastSnapshot = {
+    bagItems: bagItems.map(i=>({name:i.name,cat:i.cat,portionLabel:i.portionLabel,cpb:i.cpb,isFixed:i.isFixed,isManual:i.isManual})),
+    purchaseRows: purchaseRows.map(r=>({name:r.name,buyDesc:r.buyDesc,totalCost:r.totalCost})),
+    totalCpb, inBand, totalPurchase, revenue, profit, margin,
+    bags, salePrice, TARGET_LOW, TARGET_HIGH, solverStatus, settingsLabel
+  };
+  // Show save button
+  const saveBtn = document.getElementById('save-bag-btn');
+  if(saveBtn) saveBtn.style.display='inline-block';
+
+  const solverLabel = solverStatus==='fixed-only'
+    ? '&#8505; Fixed items only &mdash; no flexible candidates'
+    : `&#10003; HiGHS: ${solverStatus}`;
+
+  const bandMsg = inBand
+    ? `&#10003; $${totalCpb.toFixed(2)}/bag &mdash; within $${TARGET_LOW.toFixed(2)}&ndash;$${TARGET_HIGH.toFixed(2)} target`
+    : `&#9888; $${totalCpb.toFixed(2)}/bag &mdash; outside target band`;
+
+  el.innerHTML = `
+  <div style="background:${inBand?'var(--green-bg)':'var(--amber-bg)'};border:1px solid ${inBand?'#a3d9b1':'#f6b886'};border-radius:8px;padding:.6rem 1rem;margin-bottom:1rem;">
+    <div style="font-weight:500;font-size:13px;color:${inBand?'var(--green-text)':'var(--amber-text)'};">${bandMsg}</div>
+    <div style="font-size:11px;opacity:.75;margin-top:2px;color:${inBand?'var(--green-text)':'var(--amber-text)'};">${solverLabel}</div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card"><div class="mlabel">Items per bag</div><div class="mval">${bagItems.length}</div></div>
+    <div class="metric-card"><div class="mlabel">Fruits / Veg</div><div class="mval">${bagItems.filter(i=>i.cat==='fruit').length} / ${bagItems.filter(i=>i.cat==='veg').length}</div></div>
+    <div class="metric-card"><div class="mlabel">Cost per bag</div><div class="mval" style="color:${bc};">$${totalCpb.toFixed(2)}</div></div>
+    <div class="metric-card"><div class="mlabel">Total outlay</div><div class="mval">$${totalPurchase.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="metric-card"><div class="mlabel">Revenue</div><div class="mval">$${revenue.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="metric-card"><div class="mlabel">Gross profit</div><div class="mval" style="color:${profit>=0?'var(--green)':'var(--red)'};">$${profit.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+    <div class="metric-card"><div class="mlabel">Margin</div><div class="mval" style="color:${margin>=0?'var(--green)':'var(--red)'};">${margin.toFixed(1)}%</div></div>
+  </div>
+
+  <div class="section-title">Per-bag contents &mdash; ${bagItems.length} items</div>
+  ${bagItems.map(i=>`<div class="result-row">
+    <span class="rname">${i.name}</span>
+    <span class="badge badge-${i.cat}">${i.cat}</span>
+    ${i.isFixed?'<span class="badge badge-fixed">fixed</span>':i.forcedIn?'<span class="badge badge-fixed">always-in</span>':i.isManual?'<span class="badge badge-fixed">pinned</span>':'<span class="badge badge-auto">optimized</span>'}
+    <span class="rsub">${i.portionLabel}</span>
+    <span class="rprice">$${(i.cpb||0).toFixed(3)}</span>
+  </div>`).join('')}
+  <div class="result-row" style="border-top:1px solid var(--border2);margin-top:4px;">
+    <span class="rname" style="font-weight:500;">Total per bag</span>
+    <span class="rprice" style="font-size:1rem;color:${bc};">$${totalCpb.toFixed(2)}</span>
+  </div>
+
+  <div class="section-title">Bulk purchase order &mdash; ${bags} customers</div>
+  ${purchaseRows.map(r=>`<div class="result-row">
+    <span class="rname">${r.name}</span>
+    <span class="rsub">${r.buyDesc}</span>
+    <span class="rprice">$${r.totalCost.toFixed(2)}</span>
+  </div>`).join('')}
+  <div class="result-row" style="border-top:1px solid var(--border2);margin-top:4px;">
+    <span class="rname" style="font-weight:500;">Total outlay</span>
+    <span class="rprice" style="font-size:1rem;">$${totalPurchase.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+  </div>
+
+  ${unpriceable.length ? `
+  <div class="section-title">Skipped &mdash; no priceable unit (${unpriceable.length})</div>
+  ${unpriceable.map(i=>`<div class="result-row">
+    <span class="rname" style="color:var(--text3);">${i.name}</span>
+    <span class="rsub">${i.pack||'no pack info'}</span>
+    <span class="badge badge-skip">skipped</span>
+  </div>`).join('')}` : ''}
+
+
+
+  ${!inBand ? `<div class="warning-box" style="margin-top:.5rem;">
+    Bag cost $${totalCpb.toFixed(2)} is ${totalCpb<TARGET_LOW?'below':'above'} the $${TARGET_LOW.toFixed(2)}&ndash;$${TARGET_HIGH.toFixed(2)} target band.
+    ${totalCpb<TARGET_LOW
+      ? 'Unit sizes may be too large to fill the remaining budget as whole units. Try adding cheaper items, or increase max units for existing groups.'
+      : 'Fixed items are pushing over budget. Reduce fixed portions in the Review step.'}
+  </div>` : ''}
+
+  <details style="margin-top:1.25rem;">
+    <summary>Solution detail &mdash; ${selectedGroups.length} selected &middot; ${skippedGroups.length} skipped</summary>
+    <div class="tbl-wrap" style="margin-top:.75rem;">
+    <table>
+      <thead><tr>
+        <th>Group</th><th>Chosen supplier</th><th>Cat</th>
+        <th>Unit size</th><th>Units</th><th>$/bag</th><th>Alternatives</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+      ${[...selectedGroups.map(g=>({...g,inBag:true})), ...skippedGroups.map(g=>({...g,inBag:false}))].map(g=>{
+        const i   = g.inBag ? g.chosen : (g.lockedSupplier||g.cheapest);
+        const cpb = g.inBag ? (i.cpl?i.cpl*g.portion:(i.cpu||0)*g.unitCount) : i.cpb;
+        const alts = g.suppliers.filter(s=>s.id!==i.id)
+          .map(a=>`<span style="font-size:10px;color:var(--text3);">${a.name} $${a.cpb.toFixed(3)}</span>`).join(', ') || '&mdash;';
+        return `<tr style="${g.inBag?'':'opacity:.5'}">
+          <td style="font-weight:${g.inBag?'500':'400'};">${g.key.charAt(0).toUpperCase()+g.key.slice(1)}</td>
+          <td>${i.name}${g.lockedSupplier?' &#128204;':''}</td>
+          <td><span class="badge badge-${g.cat}">${g.cat}</span></td>
+          <td style="color:var(--text3);">${i.us?i.us.label:'&mdash;'}</td>
+          <td>${g.inBag?g.unitCount:'&mdash;'}</td>
+          <td>$${cpb.toFixed(3)}</td>
+          <td>${alts}</td>
+          <td>${g.inBag
+            ? '<span class="badge badge-ok">in bag</span>'
+            : '<span class="badge" style="background:var(--surface2);color:var(--text3);border:1px solid var(--border);">skipped</span>'
+          }</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table></div>
+  </details>`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PERSISTENCE — list, settings and saved bags survive a refresh
+══════════════════════════════════════════════════════════════ */
+const STORE_KEY = 'produce-bag-optimizer-v1';
+const SETTING_IDS = ['s-bags','s-sale','w-lambda','w-balance'];
+
+function persistState(){
+  try{
+    const settings = {};
+    SETTING_IDS.forEach(id => settings[id] = document.getElementById(id).value);
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      catalogue, nid, chosenSupplier, userLockedSupplier, groupAlias, splitItems, savedBags, settings
+    }));
+  }catch(e){ /* storage unavailable (private mode etc.) — run session-only */ }
+}
+
+function restoreState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return;
+    const st = JSON.parse(raw);
+    catalogue = st.catalogue || [];
+    // Migration: older sessions auto-applied a global default max to every item.
+    // Only user-set maxes (_maxOverride) survive; the rest become flexible.
+    catalogue.forEach(i=>{ if(i.maxUnits && !i._maxOverride) i.maxUnits = null; });
+    nid = st.nid || catalogue.reduce((m,i)=>Math.max(m,i.id||0),0)+1;
+    Object.assign(chosenSupplier, st.chosenSupplier||{});
+    Object.assign(userLockedSupplier, st.userLockedSupplier||{});
+    Object.assign(groupAlias, st.groupAlias||{});
+    Object.assign(splitItems, st.splitItems||{});
+    savedBags = st.savedBags || [];
+    Object.entries(st.settings||{}).forEach(([id,v])=>{
+      const el = document.getElementById(id);
+      if(el && v!=null && v!=='') el.value = v;
+    });
+    document.getElementById('wlam-lbl').textContent = document.getElementById('w-lambda').value;
+    document.getElementById('wbal-lbl').textContent = document.getElementById('w-balance').value;
+    updateSavedBadge();
+    if(catalogue.length){
+      afterLoad();
+      showStatus(`Restored ${catalogue.length} item${catalogue.length!==1?'s':''} and settings from your last session`);
+    }
+  }catch(e){ /* corrupt store — start fresh */ }
+}
+
+SETTING_IDS.forEach(id => document.getElementById(id).addEventListener('change', persistState));
+window.addEventListener('beforeunload', persistState);
+restoreState();
+</script>
+</body>
+</html>
+
+
+
+
+
+
+<!-- Property of GFSI -->
