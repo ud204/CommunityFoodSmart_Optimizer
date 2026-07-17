@@ -8,7 +8,7 @@ in a browser and go.
 
 ## The story so far
 
-Community Food Smart (CFS) is a GFSI program where we buy produce directly from suppliers and put together bags that clients buy for a flat $15 each. The goal for each bag is to fit as much value and quality as possible into that $15 budget. Right now Sandi (and other CFS leaders) work out what goes in each bag manually, which takes a lot of time and number-crunching. I built this page to automate that part, it uses optimization to figure out a good bag for the budget automatically, so we spend less time on the math. It's a first step, and could grow into more later.
+Community Food Smart (CFS) is a GFSI program where we buy produce directly from suppliers and put together bags that clients buy for a flat $15 each. The goal for each bag is to fit as much value and quality as possible into that $15 budget. Right now CFS leaders work out what goes in each bag manually, which takes a lot of time and number-crunching. I built this page to automate that part, it uses optimization to figure out a good bag for the budget automatically, so we spend less time on the math. It's a first step, and could grow into more later.
 
 I first tried solving this with a **greedy algorithm**, mostly because that was
 the first approach that came to mind. It worked, but it was pretty brute-force
