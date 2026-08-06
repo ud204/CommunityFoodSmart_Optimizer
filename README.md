@@ -2,9 +2,13 @@
 
 A browser-based tool that uses linear-programming / optimization to help with
 food planning decisions. Everything runs client-side in `index.html` — open it
-in a browser and go.
+in a browser and go. 
 
-## The story so far (in the interest of honesty)
+**Live Demo:** [Optimizer](https://produce-optimzer.netlify.app/)
+
+## The story so far
+
+Community Food Smart (CFS) is a GFSI program where we buy produce directly from suppliers and put together bags that clients buy for a flat $15 each. The goal for each bag is to fit as much value and quality as possible into that $15 budget. Right now GFSI works out what goes in each bag manually, which takes a lot of time and number-crunching. I built this page to automate that part, it uses optimization to figure out a good bag for the budget automatically, so we spend less time on the math. It's a first step, and could grow into more later.
 
 I first tried solving this with a **greedy algorithm**, mostly because that was
 the first approach that came to mind. It worked, but it was pretty brute-force
@@ -16,12 +20,12 @@ is built on.
 
 **Full disclosure:** I have almost no background in linear programming or
 optimization, so the way the problem is modelled (the objective function and
-the constraints) may not be set up correctly.
+the constraints) may not actually be optimal.
 
-## Help wanted 🙏
+## Help wanted
 
 If you know this area and want to help **fix or improve the equation / the
-optimization model**, please go ahead — contributions and corrections are very
+optimization model**, please go ahead; contributions and corrections are very
 welcome. Feel free to open an issue or a pull request.
 
 ## What's in here
