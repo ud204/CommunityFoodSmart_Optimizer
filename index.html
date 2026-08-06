@@ -750,7 +750,7 @@ details summary:hover { color: var(--text2); }
     <div class="manual-form" style="grid-template-columns:1fr 1fr;margin-bottom:.85rem;">
       <div class="field full">
         <label>Item name</label>
-        <input type="text" id="e-name" />
+        <input type="text" id="e-name" oninput="updateParseHint()" />
       </div>
       <div class="field">
         <label>Case price ($)</label>
@@ -758,11 +758,11 @@ details summary:hover { color: var(--text2); }
       </div>
       <div class="field">
         <label>Pack / size</label>
-        <input type="text" id="e-pack" placeholder="e.g. 70 CT, 12X3 LB, 40X5'S" />
+        <input type="text" id="e-pack" placeholder="e.g. 70 CT, 12X3 LB, 40X5'S" oninput="updateParseHint()" />
       </div>
       <div class="field">
         <label>Unit price ($, optional)</label>
-        <input type="number" id="e-unit" min="0" step="0.01" />
+        <input type="number" id="e-unit" min="0" step="0.01" oninput="updateParseHint()" />
       </div>
       <div class="field">
         <label>Category</label>
@@ -782,6 +782,11 @@ details summary:hover { color: var(--text2); }
       <div class="field" id="e-fval-wrap" style="display:none;">
         <label>Fixed amount</label>
         <input type="number" id="e-fval" min="0" step="0.5" />
+      </div>
+      <div class="field full">
+        <div style="font-size:11px;color:var(--text3);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.45rem .6rem;line-height:1.4;">
+          <span style="color:var(--text2);font-weight:500;">How this parses:</span> <span id="e-parse-hint">&mdash;</span>
+        </div>
       </div>
     </div>
     <div style="display:flex;gap:.5rem;justify-content:flex-end;">
@@ -852,9 +857,26 @@ function parsePack(packStr, name, pieces){
   return nameCt ? nameCount() : {kind:'unknown', units:1, itemsPerPack:1, unitLabel:'1 unit'};
 }
 
+/* ── Effective pack spec, honouring a per-group weight→count override ──
+   When a weight case (25 LB, 12X3 LB) is set to unit type "ct" in Review with a
+   pieces-per-lb factor, treat it as a count item: pieces/case = lbs/case × factor.
+   lbsPerCase is preserved (flagged .converted) so per-lb pricing and the purchase
+   order still work, while bag portioning switches to whole pieces. ── */
+function packOpts(i){ return i ? {unitType:i.unitType, ctPerLb:i.ctPerLb} : {}; }
+function packSpec(pack, name, pieces, opts){
+  const pk = parsePack(pack, name, pieces);
+  const f = opts && +opts.ctPerLb;
+  if(opts && opts.unitType==='ct' && f>0 && pk.lbsPerCase && pk.kind!=='count'){
+    const units = Math.max(1, Math.round(pk.lbsPerCase*f));
+    return {...pk, kind:'count', units, itemsPerPack:1, unitLabel:'1 ct',
+            lbsPerUnit: pk.lbsPerCase/units, ctPerLb:f, converted:true};
+  }
+  return pk;
+}
+
 function parseCpl(item){
   if(item.perLb && item.unitPrice) return +item.unitPrice;
-  const pk=parsePack(item.pack, item.name, item.pieces);
+  const pk=packSpec(item.pack, item.name, item.pieces, packOpts(item));
   return pk.lbsPerCase ? item.casePrice/pk.lbsPerCase : null;
 }
 /* ── Items per BAG UNIT for count items: 1 normally (bags count single items,
@@ -862,13 +884,16 @@ function parseCpl(item){
    (bags get a whole inner pack, e.g. a sleeve of 5). Purchasing is identical
    either way — only the bag accounting changes. ── */
 function unitItems(item){
-  const pk=parsePack(item.pack, item.name, item.pieces);
+  const pk=packSpec(item.pack, item.name, item.pieces, packOpts(item));
   return (item.countMode==='pack' && pk.itemsPerPack>1) ? pk.itemsPerPack : 1;
 }
 
 function parseCpu(item){
-  const pk=parsePack(item.pack, item.name, item.pieces);
+  const pk=packSpec(item.pack, item.name, item.pieces, packOpts(item));
   const ui=unitItems(item);
+  // Weight case counted by piece (unit type "ct" + pieces/lb): cost per piece is
+  // the per-lb cost ÷ pieces per lb — works whether priced by case or by $/lb.
+  if(pk.converted){ const cpl=parseCpl(item); return cpl!=null ? cpl/pk.ctPerLb : null; }
   // Supplier sheets quote Unit Price per inner pack (e.g. per garlic SLEEVE for
   // 40X5'S). Per bag unit that's ×(unitItems/itemsPerPack): per item → ÷pack
   // size; per whole pack → unchanged.
@@ -876,6 +901,42 @@ function parseCpu(item){
   return (pk.kind==='count'||pk.kind==='wpack') ? item.casePrice*ui/pk.units : null;
 }
 function detectPerLb(uStr){ return String(uStr||'').toUpperCase().includes('LB'); }
+
+/* ── Plain-language description of how a pack + name currently parse, for the
+   edit form. Mirrors parsePack's kinds and flags when the count was inferred
+   from the item name rather than the Pack/size field. ── */
+function describeParse(pack, name, pieces, unitPrice){
+  const r = n => Math.round(n*100)/100;
+  const pk = parsePack(pack, name, pieces);
+  if(pk.kind==='count'){
+    // If dropping the name still yields a count, the count came from the pack
+    // (or pieces column) — otherwise it was read out of the item name.
+    const fromName = parsePack(pack, '', pieces).kind !== 'count';
+    let s = `${pk.units} countable unit${pk.units===1?'':'s'} per case`;
+    if(pk.itemsPerPack>1){
+      const packs = pk.units/pk.itemsPerPack;
+      s += ` (${packs} pack${packs===1?'':'s'} of ${pk.itemsPerPack})`;
+    }
+    if(fromName) s += ' — count detected from the item name';
+    return s;
+  }
+  if(pk.kind==='wpack') return `${pk.units} pack${pk.units===1?'':'s'} of ${r(pk.lbsPerUnit)} lb = ${r(pk.lbsPerCase)} lb per case (priced by weight)`;
+  if(pk.kind==='bulk')  return `${r(pk.lbsPerCase)} lb bulk — sold loose by weight`;
+  const hasUnit = !isNaN(parseFloat(unitPrice));
+  return hasUnit ? 'Pack not recognized — priced by its unit price'
+                 : 'Pack not recognized — set a unit price to make it usable';
+}
+function updateParseHint(){
+  const el = document.getElementById('e-parse-hint');
+  if(!el) return;
+  const i = catalogue.find(x=>x.id===editingItemId);
+  el.textContent = describeParse(
+    document.getElementById('e-pack').value,
+    document.getElementById('e-name').value,
+    i ? i.pieces : undefined,
+    document.getElementById('e-unit').value
+  );
+}
 
 function isPriceable(item){ return parseCpl(item)!==null||parseCpu(item)!==null; }
 
@@ -885,7 +946,8 @@ function isPriceable(item){ return parseCpl(item)!==null||parseCpu(item)!==null;
    use fixedVal or minPortion as the floor since you scoop by weight.
    For NxM packs the individual unit is M lbs / M oz / etc. — cannot go below that. */
 function parseUnitSize(item){
-  const pk=parsePack(item.pack, item.name, item.pieces);
+  const pk=packSpec(item.pack, item.name, item.pieces, packOpts(item));
+  if(pk.converted)      return {lbs:null, label:'1 ct'}; // count by piece, not weight
   if(pk.kind==='wpack') return {lbs:pk.lbsPerUnit, label:pk.unitLabel};
   if(pk.kind==='bulk')  return {lbs:1, label:'1 lb'};
   const ui=unitItems(item);
@@ -1104,6 +1166,7 @@ function openEditItem(id){
   document.getElementById('e-ftype').value = i.fixedType||'none';
   document.getElementById('e-fval').value  = i.fixedVal!=null ? i.fixedVal : '';
   document.getElementById('e-fval-wrap').style.display = (i.fixedType && i.fixedType!=='none') ? 'block' : 'none';
+  updateParseHint();
   document.getElementById('edit-overlay').style.display = 'block';
 }
 
@@ -1362,6 +1425,13 @@ function renderReview(){
       return cpk.kind==='count' ? 'ct' : (cpk.lbsPerCase || chosenItem.perLb) ? 'lb' : 'ct'; })();
     const groupUnitType = g.items.find(i=>i.unitType)?.unitType || autoUnitType;
     const unitConflict  = groupMinUnits > groupMaxUnits;
+    // Weight case (25 LB, 12X3 LB) → the pieces-per-lb factor that lets it be
+    // counted by piece when unit type is switched to "ct". Only offered when the
+    // chosen supplier's pack carries a weight to convert from.
+    const chosenPk       = parsePack(chosenItem.pack, chosenItem.name, chosenItem.pieces);
+    const chosenLbsCase  = chosenPk.lbsPerCase || 0;
+    const chosenHasWeight = chosenLbsCase>0 && chosenPk.kind!=='count';
+    const groupCtPerLb   = g.items.find(i=>i.ctPerLb)?.ctPerLb || '';
     // N X M packs can be counted per item (default) or per whole inner pack
     const groupIpp       = parsePack(chosenItem.pack, chosenItem.name, chosenItem.pieces).itemsPerPack || 1;
     const groupCountMode = g.items.find(i=>i.countMode)?.countMode || 'item';
@@ -1434,6 +1504,11 @@ function renderReview(){
           <option value="lb" ${groupUnitType==='lb'?'selected':''}>lbs</option>
           <option value="kg" ${groupUnitType==='kg'?'selected':''}>kg</option>
         </select>
+        ${(groupUnitType==='ct' && chosenHasWeight)?`<input type="number" min="0" step="0.5" value="${groupCtPerLb}" placeholder="ct / lb"
+          title="Pieces per pound — converts this ${(+chosenLbsCase).toFixed(0)} lb case into a piece count. Leave empty to keep pricing by weight."
+          style="width:62px;font-size:10px;padding:1px 3px;margin-top:4px;display:block;"
+          onchange="applyGroupSetting('${gKey}','ctPerLb',parseFloat(this.value)||null);renderReview();" />
+        ${groupCtPerLb?`<span style="font-size:9px;color:var(--text3);display:block;">&asymp; ${Math.max(1,Math.round(chosenLbsCase*groupCtPerLb))} ct / case</span>`:''}`:''}
         ${groupIpp>1?`<select style="font-size:10px;padding:1px 3px;margin-top:4px;display:block;max-width:100px;"
           title="What one unit in a bag means for this ${groupIpp}-per-pack item"
           onchange="applyGroupSetting('${gKey}','countMode',this.value);renderReview();">
@@ -1716,7 +1791,7 @@ function renderSavedBags(){
 /* ── Case geometry for the LP's waste model: perBagUnit = lbs (weight) or 1
    (count) per portion unit; perCase = lbs or units per purchased case ── */
 function caseParams(sup){
-  const pk=parsePack(sup.pack, sup.name, sup.pieces);
+  const pk=packSpec(sup.pack, sup.name, sup.pieces, packOpts(sup));
   if(sup.minLbs) return {perBagUnit:sup.minLbs, perCase:pk.lbsPerCase||1};
   return {perBagUnit:unitItems(sup), perCase:pk.units||1};
 }
@@ -1773,7 +1848,7 @@ async function _runAlgoAsync(){
 
     const suppliers = priceable.map(i => {
       const cpl=parseCpl(i), cpu=parseCpu(i), us=parseUnitSize(i);
-      const kind=parsePack(i.pack, i.name, i.pieces).kind;
+      const kind=packSpec(i.pack, i.name, i.pieces, packOpts(i)).kind;
       const fixedType=i.fixedType||'none', fixedVal=i.fixedVal||null;
       let cpb;
       if(fixedType==='lb'&&fixedVal)      cpb=(cpl||0)*fixedVal;
@@ -2076,7 +2151,7 @@ function countLabel(n, i){
   if(usLabel && usLabel!=='1 ct' && usLabel!=='1 unit'){
     return n>1 ? `${n} &times; ${usLabel.replace(/^1 /,'')}` : usLabel;
   }
-  const pk = parsePack(i.pack, i.name, i.pieces);
+  const pk = packSpec(i.pack, i.name, i.pieces, packOpts(i));
   const hint = (pk.itemsPerPack>1 && unitItems(i)===1) ? ` (packs of ${pk.itemsPerPack})` : '';
   return `${n} ct${hint}`;
 }
@@ -2119,7 +2194,7 @@ async function renderFinalResults({alwaysInItems, selectedGroups, skippedGroups,
   // Purchase order — floor cases + loose units when supplier allows, else ceil
   const purchaseRows = bagItems.map(i => {
     let totalCost, buyDesc;
-    const pk = parsePack(i.pack, i.name, i.pieces);
+    const pk = packSpec(i.pack, i.name, i.pieces, packOpts(i));
     const canBuyUnits = i.unitsAvailable !== false; // default true
 
     // Helper: compute floor cases + loose for weight items
@@ -2167,10 +2242,30 @@ async function renderFinalResults({alwaysInItems, selectedGroups, skippedGroups,
                  : `${cases} case${cases!==1?'s':''}` };
     }
 
+    // Helper: weight cases counted by piece (unit type "ct" + ct/lb factor).
+    // Bags are portioned in pieces, but the supplier still sells loose by the
+    // POUND — so whole cases stay cases and the leftover pieces are bought as
+    // pounds, always rounded UP (ceil pieces ÷ ct-per-lb, e.g. 45 ct → 23 lbs).
+    function floorCasesPlusLooseCtAsLb(totalPieces, pk, casePrice, pricePerLb){
+      const upc      = pk.units;                    // pieces per case
+      const cases    = Math.floor(totalPieces/upc);
+      const loosePcs = totalPieces - cases*upc;
+      const looseLbs = Math.ceil(loosePcs / pk.ctPerLb);
+      const pPerLb   = pricePerLb || (casePrice/pk.lbsPerCase);
+      return { totalCost: cases*casePrice + looseLbs*pPerLb,
+               buyDesc: loosePcs > 0
+                 ? (cases>0 ? `${cases} case${cases!==1?'s':''} + ${looseLbs} lb${looseLbs!==1?'s':''}`
+                            : `${looseLbs} lb${looseLbs!==1?'s':''}`)
+                 : `${cases} case${cases!==1?'s':''}` };
+    }
+
     if(i.fixedType==='ct'&&i.fixedVal){
       const upc=(pk.kind==='count'||pk.kind==='wpack')?pk.units:1;
       const totalUnits = i.fixedVal*unitItems(i)*bags;
-      if(canBuyUnits){
+      if(canBuyUnits && pk.converted){
+        const r = floorCasesPlusLooseCtAsLb(totalUnits, pk, i.casePrice, i.cpl);
+        totalCost=r.totalCost; buyDesc=r.buyDesc;
+      } else if(canBuyUnits){
         const r = floorCasesPlusLooseCount(totalUnits, upc, i.casePrice, (!i.perLb&&i.unitPrice)||null, pk.itemsPerPack);
         totalCost=r.totalCost; buyDesc=r.buyDesc;
       } else {
@@ -2207,7 +2302,10 @@ async function renderFinalResults({alwaysInItems, selectedGroups, skippedGroups,
     } else {
       const totalUnits=(i.unitCount||1)*unitItems(i)*bags;
       const upc=pk.units||1;
-      if(canBuyUnits){
+      if(canBuyUnits && pk.converted){
+        const r = floorCasesPlusLooseCtAsLb(totalUnits, pk, i.casePrice, i.cpl);
+        totalCost=r.totalCost; buyDesc=r.buyDesc;
+      } else if(canBuyUnits){
         const r = floorCasesPlusLooseCount(totalUnits, upc, i.casePrice, (!i.perLb&&i.unitPrice)||null, pk.itemsPerPack);
         totalCost=r.totalCost; buyDesc=r.buyDesc;
       } else {
